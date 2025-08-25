@@ -27,6 +27,7 @@ import re
 import time
 import logging
 import threading
+import csv
 from typing import Dict, Optional, Callable
 from datetime import datetime
 import json
@@ -331,6 +332,12 @@ class DeviceAutoPrinter:
         self.printer = ZebraZPL(printer_name)
         self.serial_monitor = SerialPortMonitor(serial_port, baudrate) if serial_port else None
         
+        # Create output directories
+        self.zpl_output_dir = "zpl_outputs"
+        self.csv_file_path = "device_log.csv"
+        self._create_output_directories()
+        self._initialize_csv_file()
+        
         # Statistics
         self.stats = {
             'devices_processed': 0,
@@ -344,6 +351,108 @@ class DeviceAutoPrinter:
         if self.serial_monitor:
             self.serial_monitor.set_data_callback(self._handle_serial_data)
     
+    def _create_output_directories(self):
+        """Create output directories if they don't exist."""
+        try:
+            if not os.path.exists(self.zpl_output_dir):
+                os.makedirs(self.zpl_output_dir)
+                logger.info(f"Created ZPL output directory: {self.zpl_output_dir}")
+        except Exception as e:
+            logger.error(f"Failed to create output directory: {e}")
+    
+    def _initialize_csv_file(self):
+        """Initialize CSV file with headers if it doesn't exist."""
+        try:
+            # Check if CSV file exists
+            file_exists = os.path.exists(self.csv_file_path)
+            
+            if not file_exists:
+                # Create CSV file with headers
+                headers = [
+                    'timestamp',
+                    'serial_number', 
+                    'imei',
+                    'imsi',
+                    'ccid',
+                    'mac_address',
+                    'stc',
+                    'print_status',
+                    'zpl_file',
+                    'raw_data'
+                ]
+                
+                with open(self.csv_file_path, 'w', newline='', encoding='utf-8') as csvfile:
+                    writer = csv.writer(csvfile)
+                    writer.writerow(headers)
+                
+                logger.info(f"Created CSV log file: {self.csv_file_path}")
+            else:
+                logger.info(f"Using existing CSV log file: {self.csv_file_path}")
+                
+        except Exception as e:
+            logger.error(f"Failed to initialize CSV file: {e}")
+    
+    def _save_zpl_file(self, device_data: Dict[str, str], zpl_commands: str) -> str:
+        """
+        Save ZPL commands to a file named with the serial number.
+        
+        Args:
+            device_data (Dict[str, str]): Device data dictionary
+            zpl_commands (str): ZPL command string
+            
+        Returns:
+            str: Filename of saved ZPL file
+        """
+        try:
+            serial_number = device_data.get('SERIAL_NUMBER', 'UNKNOWN')
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f"{serial_number}_{timestamp}.zpl"
+            filepath = os.path.join(self.zpl_output_dir, filename)
+            
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write(zpl_commands)
+            
+            logger.info(f"Saved ZPL file: {filename}")
+            return filename
+            
+        except Exception as e:
+            logger.error(f"Failed to save ZPL file: {e}")
+            return ""
+    
+    def _log_to_csv(self, device_data: Dict[str, str], print_status: str, 
+                    zpl_filename: str, raw_data: str):
+        """
+        Log device information to CSV file.
+        
+        Args:
+            device_data (Dict[str, str]): Device data dictionary
+            print_status (str): Print status (SUCCESS/FAILED)
+            zpl_filename (str): Name of saved ZPL file
+            raw_data (str): Original raw data from serial port
+        """
+        try:
+            row_data = [
+                device_data.get('TIMESTAMP', ''),
+                device_data.get('SERIAL_NUMBER', ''),
+                device_data.get('IMEI', ''),
+                device_data.get('IMSI', ''),
+                device_data.get('CCID', ''),
+                device_data.get('MAC_ADDRESS', ''),
+                device_data.get('STC', ''),
+                print_status,
+                zpl_filename,
+                raw_data.strip()
+            ]
+            
+            with open(self.csv_file_path, 'a', newline='', encoding='utf-8') as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerow(row_data)
+            
+            logger.debug(f"Logged device data to CSV: {device_data.get('SERIAL_NUMBER', 'UNKNOWN')}")
+            
+        except Exception as e:
+            logger.error(f"Failed to log to CSV: {e}")
+    
     def _handle_serial_data(self, raw_data: str):
         """Handle incoming serial data."""
         logger.info(f"Received data: {raw_data}")
@@ -352,12 +461,22 @@ class DeviceAutoPrinter:
         device_data = self.parser.parse_data(raw_data)
         if not device_data:
             self.stats['parse_errors'] += 1
+            # Log parse error to CSV
+            self._log_to_csv({
+                'TIMESTAMP': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'SERIAL_NUMBER': 'PARSE_ERROR',
+                'IMEI': '',
+                'IMSI': '',
+                'CCID': '',
+                'MAC_ADDRESS': '',
+                'STC': ''
+            }, 'PARSE_ERROR', '', raw_data)
             return
         
         self.stats['devices_processed'] += 1
         
-        # Print label
-        success = self.print_device_label(device_data)
+        # Print label and save files
+        success, zpl_filename = self.print_device_label_with_save(device_data, raw_data)
         if success:
             self.stats['successful_prints'] += 1
         else:
@@ -366,9 +485,59 @@ class DeviceAutoPrinter:
         # Log statistics
         self._log_stats()
     
+    def print_device_label_with_save(self, device_data: Dict[str, str], raw_data: str) -> tuple:
+        """
+        Print label for device data and save ZPL file and CSV log.
+        
+        Args:
+            device_data (Dict[str, str]): Device data dictionary
+            raw_data (str): Original raw data from serial port
+            
+        Returns:
+            tuple: (success: bool, zpl_filename: str)
+        """
+        zpl_filename = ""
+        print_status = "FAILED"
+        
+        try:
+            # Validate template
+            if not self.template.validate_template(device_data):
+                logger.error("Template validation failed")
+                print_status = "TEMPLATE_ERROR"
+                self._log_to_csv(device_data, print_status, zpl_filename, raw_data)
+                return False, zpl_filename
+            
+            # Render ZPL
+            zpl_commands = self.template.render(device_data)
+            logger.debug(f"Rendered ZPL:\n{zpl_commands}")
+            
+            # Save ZPL file
+            zpl_filename = self._save_zpl_file(device_data, zpl_commands)
+            
+            # Print
+            success = self.printer.send_zpl(zpl_commands)
+            
+            if success:
+                print_status = "SUCCESS"
+                logger.info(f"Successfully printed label for device {device_data.get('SERIAL_NUMBER', 'UNKNOWN')}")
+            else:
+                print_status = "PRINT_FAILED"
+                logger.error(f"Failed to print label for device {device_data.get('SERIAL_NUMBER', 'UNKNOWN')}")
+            
+            # Log to CSV
+            self._log_to_csv(device_data, print_status, zpl_filename, raw_data)
+            
+            return success, zpl_filename
+            
+        except Exception as e:
+            logger.error(f"Error printing device label: {e}")
+            print_status = f"ERROR: {str(e)}"
+            self._log_to_csv(device_data, print_status, zpl_filename, raw_data)
+            return False, zpl_filename
+    
     def print_device_label(self, device_data: Dict[str, str]) -> bool:
         """
-        Print label for device data.
+        Print label for device data (legacy method for compatibility).
         
         Args:
             device_data (Dict[str, str]): Device data dictionary
@@ -376,28 +545,8 @@ class DeviceAutoPrinter:
         Returns:
             bool: True if printing successful
         """
-        try:
-            # Validate template
-            if not self.template.validate_template(device_data):
-                logger.error("Template validation failed")
-                return False
-            
-            # Render ZPL
-            zpl_commands = self.template.render(device_data)
-            logger.debug(f"Rendered ZPL:\n{zpl_commands}")
-            
-            # Print
-            success = self.printer.send_zpl(zpl_commands)
-            if success:
-                logger.info(f"Successfully printed label for device {device_data.get('SERIAL_NUMBER', 'UNKNOWN')}")
-            else:
-                logger.error(f"Failed to print label for device {device_data.get('SERIAL_NUMBER', 'UNKNOWN')}")
-            
-            return success
-            
-        except Exception as e:
-            logger.error(f"Error printing device label: {e}")
-            return False
+        success, _ = self.print_device_label_with_save(device_data, "")
+        return success
     
     def start(self) -> bool:
         """Start the auto-printer system."""

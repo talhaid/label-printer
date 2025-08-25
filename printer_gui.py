@@ -171,6 +171,16 @@ class AutoPrinterGUI:
         self.errors_label = ttk.Label(stats_frame, text="0")
         self.errors_label.grid(row=1, column=3, sticky="w", padx=(5, 20))
         
+        # File output info
+        files_frame = ttk.LabelFrame(status_frame, text="Output Files")
+        files_frame.pack(fill="x", padx=5, pady=5)
+        
+        ttk.Label(files_frame, text="ZPL Files:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
+        ttk.Button(files_frame, text="Open Folder", command=self.open_zpl_folder).grid(row=0, column=1, sticky="w", padx=5, pady=2)
+        
+        ttk.Label(files_frame, text="CSV Log:").grid(row=1, column=0, sticky="w", padx=5, pady=2)
+        ttk.Button(files_frame, text="Open CSV", command=self.open_csv_file).grid(row=1, column=1, sticky="w", padx=5, pady=2)
+        
         # Live data preview
         preview_frame = ttk.LabelFrame(status_frame, text="Live Data Preview")
         preview_frame.pack(fill="both", expand=True, padx=5, pady=5)
@@ -532,6 +542,30 @@ class AutoPrinterGUI:
                 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save logs: {e}")
+    
+    def open_zpl_folder(self):
+        """Open the ZPL outputs folder."""
+        try:
+            import subprocess
+            zpl_folder = os.path.abspath("zpl_outputs")
+            if os.path.exists(zpl_folder):
+                subprocess.Popen(f'explorer "{zpl_folder}"')
+            else:
+                messagebox.showinfo("Info", "ZPL output folder will be created when first device is processed")
+        except Exception as e:
+            self.log_message(f"Error opening ZPL folder: {e}", "ERROR")
+    
+    def open_csv_file(self):
+        """Open the CSV log file."""
+        try:
+            import subprocess
+            csv_file = os.path.abspath("device_log.csv")
+            if os.path.exists(csv_file):
+                subprocess.Popen(f'start excel "{csv_file}"', shell=True)
+            else:
+                messagebox.showinfo("Info", "CSV log file will be created when first device is processed")
+        except Exception as e:
+            self.log_message(f"Error opening CSV file: {e}", "ERROR")
     
     def log_message(self, message, level="INFO"):
         """Add message to log display."""
