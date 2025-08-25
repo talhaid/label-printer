@@ -178,17 +178,21 @@ class AutoPrinterGUI:
         self.test_button = ttk.Button(control_frame, text="Test Print", command=self.test_print)
         self.test_button.pack(side="left", padx=5, pady=5)
         
-        # Device Data Table
-        data_frame = ttk.LabelFrame(main_frame, text="Device Data Table")
-        data_frame.pack(fill="both", expand=True, padx=5, pady=5)
+        # Create notebook for dual tables
+        tables_notebook = ttk.Notebook(main_frame)
+        tables_notebook.pack(fill="both", expand=True, padx=5, pady=5)
         
-        # Data table
-        data_table_frame = ttk.Frame(data_frame)
-        data_table_frame.pack(fill="both", expand=True, padx=5, pady=5)
+        # Device Labels Table Tab
+        device_frame = ttk.Frame(tables_notebook)
+        tables_notebook.add(device_frame, text="Device Labels (Zebra)")
+        
+        # Device data table
+        device_table_frame = ttk.Frame(device_frame)
+        device_table_frame.pack(fill="both", expand=True, padx=5, pady=5)
         
         # Create treeview for device data
         columns = ("STC", "Serial", "IMEI", "IMSI", "CCID", "MAC", "Status", "Time")
-        self.data_tree = ttk.Treeview(data_table_frame, columns=columns, show="headings", height=8)
+        self.data_tree = ttk.Treeview(device_table_frame, columns=columns, show="headings", height=8)
         
         # Configure columns
         self.data_tree.heading("STC", text="STC")
@@ -210,30 +214,78 @@ class AutoPrinterGUI:
         self.data_tree.column("Time", width=120)
         
         # Scrollbar for data table
-        data_scrollbar = ttk.Scrollbar(data_table_frame, orient="vertical", command=self.data_tree.yview)
-        self.data_tree.configure(yscrollcommand=data_scrollbar.set)
+        device_scrollbar = ttk.Scrollbar(device_table_frame, orient="vertical", command=self.data_tree.yview)
+        self.data_tree.configure(yscrollcommand=device_scrollbar.set)
         
         self.data_tree.pack(side="left", fill="both", expand=True)
-        data_scrollbar.pack(side="right", fill="y")
+        device_scrollbar.pack(side="right", fill="y")
         
         # Data control buttons (only show for queue mode)
-        data_buttons_frame = ttk.Frame(data_frame)
-        data_buttons_frame.pack(fill="x", padx=5, pady=5)
+        device_buttons_frame = ttk.Frame(device_frame)
+        device_buttons_frame.pack(fill="x", padx=5, pady=5)
         
-        self.print_selected_btn = ttk.Button(data_buttons_frame, text="Print Selected", command=self.print_selected_device)
+        self.print_selected_btn = ttk.Button(device_buttons_frame, text="Print Selected", command=self.print_selected_device)
         self.print_selected_btn.pack(side="left", padx=5)
         
-        self.print_all_btn = ttk.Button(data_buttons_frame, text="Print All", command=self.print_all_devices)
+        self.print_all_btn = ttk.Button(device_buttons_frame, text="Print All", command=self.print_all_devices)
         self.print_all_btn.pack(side="left", padx=5)
         
-        self.remove_selected_btn = ttk.Button(data_buttons_frame, text="Remove Selected", command=self.remove_selected_device)
+        self.remove_selected_btn = ttk.Button(device_buttons_frame, text="Remove Selected", command=self.remove_selected_device)
         self.remove_selected_btn.pack(side="left", padx=5)
         
-        self.clear_queue_btn = ttk.Button(data_buttons_frame, text="Clear All", command=self.clear_device_queue)
+        self.clear_queue_btn = ttk.Button(device_buttons_frame, text="Clear All", command=self.clear_device_queue)
         self.clear_queue_btn.pack(side="left", padx=5)
         
-        self.clear_table_btn = ttk.Button(data_buttons_frame, text="Clear Table", command=self.clear_data_table)
+        self.clear_table_btn = ttk.Button(device_buttons_frame, text="Clear Table", command=self.clear_data_table)
         self.clear_table_btn.pack(side="left", padx=5)
+        
+        # PCB Labels Table Tab
+        pcb_frame = ttk.Frame(tables_notebook)
+        tables_notebook.add(pcb_frame, text="PCB Labels (XPrinter)")
+        
+        # PCB data table
+        pcb_table_frame = ttk.Frame(pcb_frame)
+        pcb_table_frame.pack(fill="both", expand=True, padx=5, pady=5)
+        
+        # Create treeview for PCB data (simpler - just serial number and status)
+        pcb_columns = ("Serial", "Status", "Time", "Device STC")
+        self.pcb_tree = ttk.Treeview(pcb_table_frame, columns=pcb_columns, show="headings", height=8)
+        
+        # Configure PCB columns
+        self.pcb_tree.heading("Serial", text="Serial Number")
+        self.pcb_tree.heading("Status", text="PCB Status")
+        self.pcb_tree.heading("Time", text="Time")
+        self.pcb_tree.heading("Device STC", text="Device STC")
+        
+        self.pcb_tree.column("Serial", width=150)
+        self.pcb_tree.column("Status", width=120)
+        self.pcb_tree.column("Time", width=120)
+        self.pcb_tree.column("Device STC", width=100)
+        
+        # Scrollbar for PCB data table
+        pcb_scrollbar = ttk.Scrollbar(pcb_table_frame, orient="vertical", command=self.pcb_tree.yview)
+        self.pcb_tree.configure(yscrollcommand=pcb_scrollbar.set)
+        
+        self.pcb_tree.pack(side="left", fill="both", expand=True)
+        pcb_scrollbar.pack(side="right", fill="y")
+        
+        # PCB control buttons
+        pcb_buttons_frame = ttk.Frame(pcb_frame)
+        pcb_buttons_frame.pack(fill="x", padx=5, pady=5)
+        
+        self.pcb_enable_btn = ttk.Button(pcb_buttons_frame, text="Disable PCB Printing", command=self.toggle_pcb_printing)
+        self.pcb_enable_btn.pack(side="left", padx=5)
+        
+        self.pcb_test_btn = ttk.Button(pcb_buttons_frame, text="Test PCB Printer", command=self.test_pcb_printer)
+        self.pcb_test_btn.pack(side="left", padx=5)
+        
+        self.pcb_clear_btn = ttk.Button(pcb_buttons_frame, text="Clear PCB Log", command=self.clear_pcb_log)
+        self.pcb_clear_btn.pack(side="left", padx=5)
+        
+        # PCB printing status
+        self.pcb_enabled = True  # Default enabled
+        self.pcb_status_label = ttk.Label(pcb_buttons_frame, text="PCB Printing: Enabled", foreground="green")
+        self.pcb_status_label.pack(side="right", padx=5)
         
         # Status Frame
         status_frame = ttk.LabelFrame(main_frame, text="Status")
@@ -430,8 +482,12 @@ class AutoPrinterGUI:
             port_names = [port['device'] for port in ports]
             self.port_combo['values'] = port_names
             
-            # Try to set COM3 as default, otherwise use first available
-            if 'COM3' in port_names:
+            # Try to set COM7 as default (USB-SERIAL device), then COM4, then COM3, otherwise use first available
+            if 'COM7' in port_names:
+                self.port_combo.set('COM7')
+            elif 'COM4' in port_names:
+                self.port_combo.set('COM4')
+            elif 'COM3' in port_names:
                 self.port_combo.set('COM3')
             elif port_names:
                 self.port_combo.set(port_names[0])
@@ -491,11 +547,17 @@ class AutoPrinterGUI:
                     # Auto-print mode: use original behavior and add to table
                     result = self.auto_printer._handle_serial_data(data)
                     if result:  # If device was successfully processed
-                        device_data, stc_assigned = result
+                        device_data, stc_assigned, pcb_success = result
                         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         # Add to data table with STC and printed status
                         device_data['STC'] = stc_assigned
                         self.gui_queue.put(('add_to_table', (device_data, 'Printed', timestamp)))
+                        
+                        # Add PCB entry if PCB printing is enabled
+                        if self.pcb_enabled:
+                            serial_number = device_data.get('SERIAL_NUMBER', 'UNKNOWN')
+                            pcb_status = "Printed" if pcb_success else "Failed"
+                            self.gui_queue.put(('add_pcb_to_table', (serial_number, pcb_status, timestamp, stc_assigned)))
                 else:
                     # Queue mode: parse data and add to queue manually
                     device_data = self.auto_printer.parser.parse_data(data)
@@ -593,10 +655,11 @@ class AutoPrinterGUI:
             if self.is_monitoring and self.auto_printer:
                 if self.auto_print_mode.get():
                     # Auto-print mode: print immediately
-                    success, zpl_filename, stc_assigned = self.auto_printer.print_device_label_with_save(device_data, test_data)
+                    success, zpl_filename, stc_assigned, pcb_success = self.auto_printer.print_device_label_with_save(device_data, test_data)
                     if success:
-                        self.log_message("Test device printed successfully!", "INFO")
-                        messagebox.showinfo("Success", "Test device printed successfully!")
+                        pcb_status_text = " and PCB" if pcb_success else " (PCB failed)" if self.pcb_enabled else ""
+                        self.log_message(f"Test device printed successfully{pcb_status_text}!", "INFO")
+                        messagebox.showinfo("Success", f"Test device printed successfully{pcb_status_text}!")
                     else:
                         self.log_message("Test device print failed", "ERROR")
                         messagebox.showerror("Error", "Test device print failed")
@@ -1144,6 +1207,11 @@ class AutoPrinterGUI:
                     device_data, status, timestamp = data
                     self.add_device_to_data_table(device_data, status, timestamp)
                 
+                elif msg_type == 'add_pcb_to_table':
+                    # Add PCB entry to PCB table
+                    serial_number, status, timestamp, device_stc = data
+                    self.add_pcb_to_table(serial_number, status, timestamp, device_stc)
+                
         except queue.Empty:
             pass
         except Exception as e:
@@ -1419,6 +1487,72 @@ Features:
 For support and updates, check the project documentation."""
         
         messagebox.showinfo("About", about_text)
+    
+    def toggle_pcb_printing(self):
+        """Toggle PCB printing on/off."""
+        try:
+            if self.auto_printer:
+                self.pcb_enabled = not self.pcb_enabled
+                self.auto_printer.enable_pcb_printing(self.pcb_enabled)
+                
+                if self.pcb_enabled:
+                    self.pcb_enable_btn.config(text="Disable PCB Printing")
+                    self.pcb_status_label.config(text="PCB Printing: Enabled", foreground="green")
+                else:
+                    self.pcb_enable_btn.config(text="Enable PCB Printing")
+                    self.pcb_status_label.config(text="PCB Printing: Disabled", foreground="red")
+                
+                self.log_message(f"PCB printing {'enabled' if self.pcb_enabled else 'disabled'}", "INFO")
+            else:
+                messagebox.showwarning("Warning", "Auto-printer not initialized")
+                
+        except Exception as e:
+            self.log_message(f"Error toggling PCB printing: {e}", "ERROR")
+    
+    def test_pcb_printer(self):
+        """Test the PCB printer."""
+        try:
+            if self.auto_printer:
+                if self.auto_printer.is_pcb_printer_available():
+                    success = self.auto_printer.test_pcb_printer()
+                    if success:
+                        self.log_message("PCB printer test successful", "INFO")
+                        messagebox.showinfo("Success", "PCB printer test completed successfully!")
+                    else:
+                        self.log_message("PCB printer test failed", "ERROR")
+                        messagebox.showerror("Error", "PCB printer test failed")
+                else:
+                    messagebox.showwarning("Warning", "XPrinter XP-470B not found")
+            else:
+                messagebox.showwarning("Warning", "Auto-printer not initialized")
+                
+        except Exception as e:
+            self.log_message(f"Error testing PCB printer: {e}", "ERROR")
+            messagebox.showerror("Error", f"PCB printer test error: {e}")
+    
+    def clear_pcb_log(self):
+        """Clear the PCB log table."""
+        try:
+            for item in self.pcb_tree.get_children():
+                self.pcb_tree.delete(item)
+            self.log_message("PCB log cleared", "INFO")
+        except Exception as e:
+            self.log_message(f"Error clearing PCB log: {e}", "ERROR")
+    
+    def add_pcb_to_table(self, serial_number, status, timestamp, device_stc):
+        """Add a PCB entry to the PCB table."""
+        try:
+            values = (serial_number, status, timestamp.split(' ')[1] if ' ' in timestamp else timestamp, device_stc)
+            self.pcb_tree.insert("", 0, values=values)  # Insert at top
+            
+            # Keep only last 100 entries
+            children = self.pcb_tree.get_children()
+            if len(children) > 100:
+                for child in children[100:]:
+                    self.pcb_tree.delete(child)
+                    
+        except Exception as e:
+            self.log_message(f"Error adding PCB to table: {e}", "ERROR")
 
     def on_closing(self):
         """Handle application closing."""

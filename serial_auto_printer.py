@@ -42,6 +42,7 @@ except ImportError:
     serial = None
 
 from zebra_zpl import ZebraZPL
+from xprinter_pcb import XPrinterPCB
 
 # Configure logging
 logging.basicConfig(
@@ -104,9 +105,9 @@ class DeviceDataParser:
         for i, field_name in enumerate(self.field_names):
             device_data[field_name] = values[i]
         
-        # Add timestamp and default STC
+        # Add timestamp (STC will be assigned later during printing)
         device_data['TIMESTAMP'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        device_data['STC'] = '6000'  # Default STC value as mentioned
+        # Note: STC will be assigned during print_device_label_with_save method
         
         logger.info(f"Parsed device data: {device_data}")
         return device_data
@@ -166,10 +167,6 @@ class ZPLTemplate:
             placeholder_pattern = '{' + placeholder + '}'
             value = device_data.get(placeholder, f'MISSING_{placeholder}')
             rendered_zpl = rendered_zpl.replace(placeholder_pattern, value)
-        
-        # Also replace direct field references (without braces) for your specific template
-        for field_name, value in device_data.items():
-            rendered_zpl = rendered_zpl.replace(field_name, value)
         
         return rendered_zpl
     
@@ -317,7 +314,7 @@ class DeviceAutoPrinter:
     """Main class that coordinates serial monitoring and printing."""
     
     def __init__(self, zpl_template: str, serial_port: str = None, 
-                 baudrate: int = 9600, printer_name: str = None, initial_stc: int = 6000):
+                 baudrate: int = 9600, printer_name: str = None, initial_stc: int = 60000):
         """
         Initialize the auto-printer system.
         
@@ -326,11 +323,12 @@ class DeviceAutoPrinter:
             serial_port (str): Serial port name
             baudrate (int): Serial port baud rate
             printer_name (str): Zebra printer name
-            initial_stc (int): Starting STC value (default: 6000)
+            initial_stc (int): Starting STC value (default: 60000)
         """
         self.parser = DeviceDataParser()
         self.template = ZPLTemplate(zpl_template)
         self.printer = ZebraZPL(printer_name)
+        self.pcb_printer = XPrinterPCB()  # Add PCB printer
         self.serial_monitor = SerialPortMonitor(serial_port, baudrate) if serial_port else None
         
         # Initialize file paths first
@@ -358,11 +356,19 @@ class DeviceAutoPrinter:
             'start_time': None
         }
         
+        # PCB printing settings
+        self.pcb_printing_enabled = True  # Enable PCB printing by default
+        self.pcb_stats = {
+            'pcb_prints_attempted': 0,
+            'pcb_prints_successful': 0,
+            'pcb_prints_failed': 0
+        }
+        
         # Setup data callback
         if self.serial_monitor:
             self.serial_monitor.set_data_callback(self._handle_serial_data)
     
-    def _get_next_stc_from_csv(self, fallback_stc: int = 6000) -> int:
+    def _get_next_stc_from_csv(self, fallback_stc: int = 60000) -> int:
         """
         Get the next STC number by reading the latest from CSV file.
         
@@ -457,7 +463,7 @@ class DeviceAutoPrinter:
             device_data['STC'] = str(device_entry['stc_assigned'])
         
         # Print the device
-        success, zpl_filename = self.print_device_label_with_save(device_data, device_entry['raw_data'])
+        success, zpl_filename, _, pcb_success = self.print_device_label_with_save(device_data, device_entry['raw_data'])
         
         # Update device status
         device_entry['status'] = 'PRINTED' if success else 'FAILED'
@@ -587,7 +593,7 @@ class DeviceAutoPrinter:
             logger.error(f"Failed to log to CSV: {e}")
     
     def _handle_serial_data(self, raw_data: str):
-        """Handle incoming serial data. Returns (device_data, stc_assigned) if successful, None if failed."""
+        """Handle incoming serial data. Returns (device_data, stc_assigned, pcb_success) if successful, None if failed."""
         logger.info(f"Received data: {raw_data}")
         
         # Parse device data
@@ -609,11 +615,11 @@ class DeviceAutoPrinter:
         self.stats['devices_processed'] += 1
         
         # Print label and save files immediately
-        success, zpl_filename, stc_assigned = self.print_device_label_with_save(device_data, raw_data)
+        success, zpl_filename, stc_assigned, pcb_success = self.print_device_label_with_save(device_data, raw_data)
         if success:
             self.stats['successful_prints'] += 1
-            # Return device data and STC for GUI display
-            return device_data, stc_assigned
+            # Return device data, STC, and PCB status for GUI display
+            return device_data, stc_assigned, pcb_success
         else:
             self.stats['failed_prints'] += 1
             return None
@@ -630,7 +636,7 @@ class DeviceAutoPrinter:
             raw_data (str): Original raw data from serial port
             
         Returns:
-            tuple: (success: bool, zpl_filename: str, stc_assigned: str)
+            tuple: (success: bool, zpl_filename: str, stc_assigned: str, pcb_success: bool)
         """
         zpl_filename = ""
         print_status = "FAILED"
@@ -649,7 +655,7 @@ class DeviceAutoPrinter:
                 logger.error("Template validation failed")
                 print_status = "TEMPLATE_ERROR"
                 self._log_to_csv(device_data, print_status, zpl_filename, raw_data)
-                return False, zpl_filename, stc_assigned
+                return False, zpl_filename, stc_assigned, False
             
             # Render ZPL
             zpl_commands = self.template.render(device_data)
@@ -658,11 +664,31 @@ class DeviceAutoPrinter:
             # Save ZPL file
             zpl_filename = self._save_zpl_file(device_data, zpl_commands)
             
-            # Print
+            # Print main label on Zebra
             success = self.printer.send_zpl(zpl_commands)
+            
+            # Print PCB label on XPrinter if enabled
+            pcb_success = False
+            if self.pcb_printing_enabled and self.pcb_printer.is_available():
+                serial_number = device_data.get('SERIAL_NUMBER', 'UNKNOWN')
+                # Use device timestamp for production date, format as YYYYMMDD
+                production_date = device_data.get('TIMESTAMP', '').split(' ')[0].replace('-', '') if device_data.get('TIMESTAMP') else None
+                self.pcb_stats['pcb_prints_attempted'] += 1
+                pcb_success = self.pcb_printer.print_pcb_label(serial_number, production_date)
+                
+                if pcb_success:
+                    self.pcb_stats['pcb_prints_successful'] += 1
+                    logger.info(f"Successfully printed PCB label for device {serial_number}")
+                else:
+                    self.pcb_stats['pcb_prints_failed'] += 1
+                    logger.warning(f"Failed to print PCB label for device {serial_number}")
             
             if success:
                 print_status = "SUCCESS"
+                if self.pcb_printing_enabled and pcb_success:
+                    print_status = "SUCCESS_WITH_PCB"
+                elif self.pcb_printing_enabled and not pcb_success:
+                    print_status = "SUCCESS_PCB_FAILED"
                 logger.info(f"Successfully printed label for device {device_data.get('SERIAL_NUMBER', 'UNKNOWN')}")
             else:
                 print_status = "PRINT_FAILED"
@@ -671,13 +697,13 @@ class DeviceAutoPrinter:
             # Log to CSV
             self._log_to_csv(device_data, print_status, zpl_filename, raw_data)
             
-            return success, zpl_filename, stc_assigned
+            return success, zpl_filename, stc_assigned, pcb_success
             
         except Exception as e:
             logger.error(f"Error printing device label: {e}")
             print_status = f"ERROR: {str(e)}"
             self._log_to_csv(device_data, print_status, zpl_filename, raw_data)
-            return False, zpl_filename, stc_assigned
+            return False, zpl_filename, stc_assigned, False
     
     def print_device_label(self, device_data: Dict[str, str]) -> bool:
         """
@@ -689,7 +715,7 @@ class DeviceAutoPrinter:
         Returns:
             bool: True if printing successful
         """
-        success, _, _ = self.print_device_label_with_save(device_data, "")
+        success, _, _, _ = self.print_device_label_with_save(device_data, "")
         return success
     
     def start(self) -> bool:
@@ -736,6 +762,27 @@ class DeviceAutoPrinter:
                        f"Success Rate: {self.stats['successful_prints']}/{self.stats['devices_processed']} "
                        f"({100 * self.stats['successful_prints'] / max(1, self.stats['devices_processed']):.1f}%)")
 
+    def enable_pcb_printing(self, enabled: bool = True):
+        """Enable or disable PCB printing."""
+        self.pcb_printing_enabled = enabled
+        logger.info(f"PCB printing {'enabled' if enabled else 'disabled'}")
+    
+    def is_pcb_printer_available(self):
+        """Check if PCB printer is available."""
+        return self.pcb_printer.is_available()
+    
+    def get_pcb_stats(self):
+        """Get PCB printing statistics."""
+        return self.pcb_stats.copy()
+    
+    def test_pcb_printer(self):
+        """Test the PCB printer."""
+        if not self.pcb_printer.is_available():
+            logger.error("PCB printer not available")
+            return False
+        
+        return self.pcb_printer.test_print()
+
 
 # Your specific ZPL template with placeholders
 DEFAULT_ZPL_TEMPLATE = """^XA
@@ -746,10 +793,11 @@ DEFAULT_ZPL_TEMPLATE = """^XA
 ~SD15
 
 ^FO0,25^BQN,2,4
-^FDLA,STC:{STC};SN:{SERIAL_NUMBER};IMEI:{IMEI};IMSI:{IMSI};CCID:{CCID};MAC:{MAC_ADDRESS}^FS
+^FDLA,STC NO:{STC};SN:{SERIAL_NUMBER};IMEI:{IMEI};IMSI:{IMSI};CCID:{CCID};MAC:{MAC_ADDRESS}^FS
+
 
 ^CF0,18,18
-^FO155,2.5^FDSTC:^FS
+^FO155,2.5^FDSTC NO:^FS
 ^FO155,40^FDS/N:^FS
 ^FO155,77.5^FDIMEI:^FS
 ^FO155,115^FDIMSI:^FS
@@ -757,12 +805,12 @@ DEFAULT_ZPL_TEMPLATE = """^XA
 ^FO155,190^FDMAC:^FS
 
 ^CF0,22,16
-^FO195,2.5^FD{STC}^FS
-^FO195,40^FD{SERIAL_NUMBER}^FS
-^FO195,77.5^FD{IMEI}^FS
-^FO195,115^FD{IMSI}^FS
-^FO195,152.5^FD{CCID}^FS
-^FO195,190^FD{MAC_ADDRESS}^FS
+^FO220,2.5^FD{STC}^FS
+^FO200,40^FD{SERIAL_NUMBER}^FS
+^FO200,77.5^FD{IMEI}^FS
+^FO200,115^FD{IMSI}^FS
+^FO200,152.5^FD{CCID}^FS
+^FO200,190^FD{MAC_ADDRESS}^FS
 
 ^XZ
 """
