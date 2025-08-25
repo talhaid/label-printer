@@ -317,7 +317,7 @@ class DeviceAutoPrinter:
     """Main class that coordinates serial monitoring and printing."""
     
     def __init__(self, zpl_template: str, serial_port: str = None, 
-                 baudrate: int = 9600, printer_name: str = None):
+                 baudrate: int = 9600, printer_name: str = None, initial_stc: int = 6000):
         """
         Initialize the auto-printer system.
         
@@ -326,15 +326,26 @@ class DeviceAutoPrinter:
             serial_port (str): Serial port name
             baudrate (int): Serial port baud rate
             printer_name (str): Zebra printer name
+            initial_stc (int): Starting STC value (default: 6000)
         """
         self.parser = DeviceDataParser()
         self.template = ZPLTemplate(zpl_template)
         self.printer = ZebraZPL(printer_name)
         self.serial_monitor = SerialPortMonitor(serial_port, baudrate) if serial_port else None
         
-        # Create output directories
+        # Initialize file paths first
         self.zpl_output_dir = "zpl_outputs"
         self.csv_file_path = "device_log.csv"
+        
+        # STC counter management (depends on csv_file_path)
+        self.current_stc = self._get_next_stc_from_csv(initial_stc)
+        self.auto_increment_stc = True
+        
+        # Pending devices for manual print confirmation
+        self.pending_devices = []
+        self.device_queue_callback = None
+        
+        # Create output directories and initialize CSV
         self._create_output_directories()
         self._initialize_csv_file()
         
@@ -350,6 +361,126 @@ class DeviceAutoPrinter:
         # Setup data callback
         if self.serial_monitor:
             self.serial_monitor.set_data_callback(self._handle_serial_data)
+    
+    def _get_next_stc_from_csv(self, fallback_stc: int = 6000) -> int:
+        """
+        Get the next STC number by reading the latest from CSV file.
+        
+        Args:
+            fallback_stc (int): Fallback STC if CSV is empty or doesn't exist
+            
+        Returns:
+            int: Next STC number to use
+        """
+        try:
+            if not os.path.exists(self.csv_file_path):
+                logger.info(f"CSV file doesn't exist, starting with STC {fallback_stc}")
+                return fallback_stc
+            
+            max_stc = 0
+            with open(self.csv_file_path, 'r', newline='', encoding='utf-8') as csvfile:
+                reader = csv.DictReader(csvfile)
+                for row in reader:
+                    try:
+                        # Try both 'stc' and 'STC' column names
+                        stc_value = row.get('stc') or row.get('STC', '0')
+                        if stc_value and stc_value.isdigit():
+                            max_stc = max(max_stc, int(stc_value))
+                    except (ValueError, TypeError):
+                        continue
+            
+            if max_stc == 0:
+                logger.info(f"No valid STC found in CSV, starting with STC {fallback_stc}")
+                return fallback_stc
+            else:
+                next_stc = max_stc + 1
+                logger.info(f"Found latest STC {max_stc} in CSV, next STC will be {next_stc}")
+                return next_stc
+                
+        except Exception as e:
+            logger.warning(f"Error reading STC from CSV: {e}, using fallback STC {fallback_stc}")
+            return fallback_stc
+    
+    def set_device_queue_callback(self, callback):
+        """Set callback for when new devices are added to the queue."""
+        self.device_queue_callback = callback
+    
+    def set_stc_value(self, stc_value: int):
+        """Set the current STC value."""
+        self.current_stc = stc_value
+        logger.info(f"STC value set to: {stc_value}")
+    
+    def get_next_stc(self) -> int:
+        """Get the next STC value and increment if auto-increment is enabled."""
+        stc = self.current_stc
+        if self.auto_increment_stc:
+            self.current_stc += 1
+        return stc
+    
+    def set_auto_increment(self, enabled: bool):
+        """Enable or disable auto-increment of STC values."""
+        self.auto_increment_stc = enabled
+        logger.info(f"STC auto-increment {'enabled' if enabled else 'disabled'}")
+    
+    def add_device_to_queue(self, device_data: Dict[str, str], raw_data: str):
+        """Add device to pending queue for manual print confirmation."""
+        device_entry = {
+            'device_data': device_data,
+            'raw_data': raw_data,
+            'stc_assigned': self.get_next_stc(),
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'status': 'PENDING'
+        }
+        self.pending_devices.append(device_entry)
+        
+        # Notify GUI of new device
+        if self.device_queue_callback:
+            self.device_queue_callback(device_entry)
+        
+        logger.info(f"Device {device_data.get('SERIAL_NUMBER', 'UNKNOWN')} added to queue with STC {device_entry['stc_assigned']}")
+    
+    def print_device_from_queue(self, device_index: int, custom_stc: int = None) -> bool:
+        """Print a device from the pending queue."""
+        if device_index >= len(self.pending_devices):
+            logger.error(f"Invalid device index: {device_index}")
+            return False
+        
+        device_entry = self.pending_devices[device_index]
+        device_data = device_entry['device_data'].copy()
+        
+        # Use custom STC if provided
+        if custom_stc is not None:
+            device_data['STC'] = str(custom_stc)
+        else:
+            device_data['STC'] = str(device_entry['stc_assigned'])
+        
+        # Print the device
+        success, zpl_filename = self.print_device_label_with_save(device_data, device_entry['raw_data'])
+        
+        # Update device status
+        device_entry['status'] = 'PRINTED' if success else 'FAILED'
+        device_entry['actual_stc'] = device_data['STC']
+        device_entry['print_time'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
+        if success:
+            self.stats['successful_prints'] += 1
+            logger.info(f"Successfully printed device {device_data.get('SERIAL_NUMBER', 'UNKNOWN')} with STC {device_data['STC']}")
+        else:
+            self.stats['failed_prints'] += 1
+            logger.error(f"Failed to print device {device_data.get('SERIAL_NUMBER', 'UNKNOWN')}")
+        
+        return success
+    
+    def remove_device_from_queue(self, device_index: int):
+        """Remove a device from the pending queue."""
+        if device_index < len(self.pending_devices):
+            device = self.pending_devices.pop(device_index)
+            logger.info(f"Removed device {device['device_data'].get('SERIAL_NUMBER', 'UNKNOWN')} from queue")
+    
+    def clear_queue(self):
+        """Clear all pending devices."""
+        self.pending_devices.clear()
+        logger.info("Cleared device queue")
     
     def _create_output_directories(self):
         """Create output directories if they don't exist."""
@@ -475,7 +606,7 @@ class DeviceAutoPrinter:
         
         self.stats['devices_processed'] += 1
         
-        # Print label and save files
+        # Print label and save files immediately
         success, zpl_filename = self.print_device_label_with_save(device_data, raw_data)
         if success:
             self.stats['successful_prints'] += 1
@@ -500,6 +631,10 @@ class DeviceAutoPrinter:
         print_status = "FAILED"
         
         try:
+            # Assign STC value if not already present
+            if 'STC' not in device_data or not device_data['STC']:
+                device_data['STC'] = str(self.get_next_stc())
+            
             # Validate template
             if not self.template.validate_template(device_data):
                 logger.error("Template validation failed")

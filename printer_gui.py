@@ -82,6 +82,9 @@ class AutoPrinterGUI:
         self.update_printer_list()
         self.update_port_list()
         
+        # Initialize STC counter from CSV
+        self.initialize_stc_from_csv()
+        
         # Start GUI update timer
         self.root.after(100, self.process_gui_queue)
     
@@ -130,6 +133,32 @@ class AutoPrinterGUI:
         self.baud_combo.set("9600")
         self.baud_combo.grid(row=2, column=1, sticky="w", padx=5, pady=2)
         
+        # STC Counter Control
+        stc_frame = ttk.LabelFrame(main_frame, text="STC Counter Control")
+        stc_frame.pack(fill="x", padx=5, pady=5)
+        
+        ttk.Label(stc_frame, text="Current STC:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
+        self.stc_label = ttk.Label(stc_frame, text="6000", font=("Arial", 12, "bold"))
+        self.stc_label.grid(row=0, column=1, sticky="w", padx=5, pady=2)
+        
+        ttk.Label(stc_frame, text="Set STC:").grid(row=0, column=2, sticky="w", padx=5, pady=2)
+        self.stc_entry = ttk.Entry(stc_frame, width=10)
+        self.stc_entry.insert(0, "6000")
+        self.stc_entry.grid(row=0, column=3, sticky="w", padx=5, pady=2)
+        
+        ttk.Button(stc_frame, text="Update STC", command=self.update_stc).grid(row=0, column=4, padx=5, pady=2)
+        ttk.Button(stc_frame, text="Refresh from CSV", command=self.refresh_stc_from_csv).grid(row=0, column=5, padx=5, pady=2)
+        
+        # Printing Mode Control
+        mode_frame = ttk.LabelFrame(main_frame, text="Printing Mode")
+        mode_frame.pack(fill="x", padx=5, pady=5)
+        
+        self.auto_print_mode = tk.BooleanVar(value=True)  # Default to auto-print
+        ttk.Radiobutton(mode_frame, text="Auto Print (Print immediately when data received)", 
+                       variable=self.auto_print_mode, value=True).pack(anchor="w", padx=5, pady=2)
+        ttk.Radiobutton(mode_frame, text="Queue Mode (Add to queue for manual confirmation)", 
+                       variable=self.auto_print_mode, value=False).pack(anchor="w", padx=5, pady=2)
+        
         # Control Buttons
         control_frame = ttk.LabelFrame(main_frame, text="Control")
         control_frame.pack(fill="x", padx=5, pady=5)
@@ -143,9 +172,54 @@ class AutoPrinterGUI:
         self.test_button = ttk.Button(control_frame, text="Test Print", command=self.test_print)
         self.test_button.pack(side="left", padx=5, pady=5)
         
+        # Device Queue
+        queue_frame = ttk.LabelFrame(main_frame, text="Device Queue - Awaiting Print Confirmation")
+        queue_frame.pack(fill="both", expand=True, padx=5, pady=5)
+        
+        # Queue table
+        queue_table_frame = ttk.Frame(queue_frame)
+        queue_table_frame.pack(fill="both", expand=True, padx=5, pady=5)
+        
+        # Create treeview for device queue
+        columns = ("STC", "Serial", "IMEI", "IMSI", "CCID", "MAC", "Received")
+        self.queue_tree = ttk.Treeview(queue_table_frame, columns=columns, show="headings", height=8)
+        
+        # Configure columns
+        self.queue_tree.heading("STC", text="STC")
+        self.queue_tree.heading("Serial", text="Serial Number")
+        self.queue_tree.heading("IMEI", text="IMEI")
+        self.queue_tree.heading("IMSI", text="IMSI")
+        self.queue_tree.heading("CCID", text="CCID")
+        self.queue_tree.heading("MAC", text="MAC Address")
+        self.queue_tree.heading("Received", text="Received Time")
+        
+        self.queue_tree.column("STC", width=80)
+        self.queue_tree.column("Serial", width=120)
+        self.queue_tree.column("IMEI", width=120)
+        self.queue_tree.column("IMSI", width=120)
+        self.queue_tree.column("CCID", width=120)
+        self.queue_tree.column("MAC", width=120)
+        self.queue_tree.column("Received", width=120)
+        
+        # Scrollbar for queue table
+        queue_scrollbar = ttk.Scrollbar(queue_table_frame, orient="vertical", command=self.queue_tree.yview)
+        self.queue_tree.configure(yscrollcommand=queue_scrollbar.set)
+        
+        self.queue_tree.pack(side="left", fill="both", expand=True)
+        queue_scrollbar.pack(side="right", fill="y")
+        
+        # Queue control buttons
+        queue_buttons_frame = ttk.Frame(queue_frame)
+        queue_buttons_frame.pack(fill="x", padx=5, pady=5)
+        
+        ttk.Button(queue_buttons_frame, text="Print Selected", command=self.print_selected_device).pack(side="left", padx=5)
+        ttk.Button(queue_buttons_frame, text="Print All", command=self.print_all_devices).pack(side="left", padx=5)
+        ttk.Button(queue_buttons_frame, text="Remove Selected", command=self.remove_selected_device).pack(side="left", padx=5)
+        ttk.Button(queue_buttons_frame, text="Clear Queue", command=self.clear_device_queue).pack(side="left", padx=5)
+        
         # Status Frame
         status_frame = ttk.LabelFrame(main_frame, text="Status")
-        status_frame.pack(fill="both", expand=True, padx=5, pady=5)
+        status_frame.pack(fill="x", padx=5, pady=5)
         
         # Status indicator
         self.status_label = ttk.Label(status_frame, text="Status: Ready", font=("Arial", 12, "bold"))
@@ -170,6 +244,10 @@ class AutoPrinterGUI:
         ttk.Label(stats_frame, text="Parse Errors:").grid(row=1, column=2, sticky="w")
         self.errors_label = ttk.Label(stats_frame, text="0")
         self.errors_label.grid(row=1, column=3, sticky="w", padx=(5, 20))
+        
+        ttk.Label(stats_frame, text="Queue Size:").grid(row=0, column=4, sticky="w")
+        self.queue_size_label = ttk.Label(stats_frame, text="0", font=("Arial", 10, "bold"))
+        self.queue_size_label.grid(row=0, column=5, sticky="w", padx=(5, 20))
         
         # File output info
         files_frame = ttk.LabelFrame(status_frame, text="Output Files")
@@ -283,6 +361,32 @@ class AutoPrinterGUI:
         self.copies_var = tk.StringVar(value="1")
         ttk.Entry(print_frame, textvariable=self.copies_var, width=5).grid(row=1, column=1, sticky="w", padx=5, pady=2)
     
+    def initialize_stc_from_csv(self):
+        """Initialize STC counter value from CSV file."""
+        try:
+            # Create a temporary auto-printer instance to check CSV
+            temp_printer = DeviceAutoPrinter(
+                zpl_template=self.current_template,
+                initial_stc=6000
+            )
+            
+            # Get the next STC value based on CSV
+            next_stc = temp_printer.current_stc
+            
+            # Update GUI
+            self.stc_entry.delete(0, "end")
+            self.stc_entry.insert(0, str(next_stc))
+            self.stc_label.config(text=str(next_stc))
+            
+            self.log_message(f"STC counter initialized to {next_stc} based on CSV history", "INFO")
+            
+        except Exception as e:
+            self.log_message(f"Error initializing STC from CSV: {e}", "WARNING")
+            # Use default value
+            self.stc_entry.delete(0, "end")
+            self.stc_entry.insert(0, "6000")
+            self.stc_label.config(text="6000")
+    
     def update_printer_list(self):
         """Update the printer dropdown list."""
         try:
@@ -331,13 +435,31 @@ class AutoPrinterGUI:
                 messagebox.showerror("Error", "Please select a serial port")
                 return
             
+            # Get STC value
+            try:
+                initial_stc = int(self.stc_entry.get())
+            except ValueError:
+                initial_stc = 6000
+                self.stc_entry.delete(0, "end")
+                self.stc_entry.insert(0, "6000")
+            
             # Create auto-printer instance
             self.auto_printer = DeviceAutoPrinter(
                 zpl_template=template,
                 serial_port=port,
                 baudrate=baudrate,
-                printer_name=printer_name
+                printer_name=printer_name,
+                initial_stc=initial_stc
             )
+            
+            # Update GUI with actual STC value (may be different from input due to CSV detection)
+            actual_stc = self.auto_printer.current_stc
+            self.stc_entry.delete(0, "end")
+            self.stc_entry.insert(0, str(actual_stc))
+            self.stc_label.config(text=str(actual_stc))
+            
+            if actual_stc != initial_stc:
+                self.log_message(f"STC auto-adjusted from {initial_stc} to {actual_stc} based on CSV history", "INFO")
             
             # Override the data callback to update GUI
             original_callback = self.auto_printer._handle_serial_data
@@ -345,6 +467,10 @@ class AutoPrinterGUI:
                 self.gui_queue.put(('data', data))
                 original_callback(data)
                 self.gui_queue.put(('stats', self.auto_printer.stats))
+                # Update STC display
+                self.gui_queue.put(('stc', self.auto_printer.current_stc))
+                # Update queue display
+                self.gui_queue.put(('queue_update', None))
             
             self.auto_printer.serial_monitor.set_data_callback(gui_callback)
             
@@ -420,7 +546,15 @@ class AutoPrinterGUI:
             # Show parsed data
             self.log_message(f"Parsed data: {device_data}", "INFO")
             
-            # Print if auto-print is enabled
+            # If monitoring is active, add to queue instead of printing directly
+            if self.is_monitoring and self.auto_printer:
+                self.auto_printer.add_device_to_queue(device_data, test_data)
+                self.update_device_queue_display()
+                self.update_queue_display()
+                messagebox.showinfo("Success", "Test device added to queue for manual printing!")
+                return
+            
+            # Print if auto-print is enabled and not monitoring
             if self.auto_print_var.get():
                 template = self.template_text.get("1.0", "end-1c")
                 printer_name = self.printer_combo.get()
@@ -567,6 +701,266 @@ class AutoPrinterGUI:
         except Exception as e:
             self.log_message(f"Error opening CSV file: {e}", "ERROR")
     
+    def refresh_stc_from_csv(self):
+        """Refresh STC counter from CSV file."""
+        try:
+            if self.is_monitoring:
+                messagebox.showwarning("Warning", "Cannot refresh STC while monitoring. Stop monitoring first.")
+                return
+            
+            self.initialize_stc_from_csv()
+            messagebox.showinfo("Success", f"STC counter refreshed from CSV. Next STC: {self.stc_label.cget('text')}")
+            
+        except Exception as e:
+            self.log_message(f"Error refreshing STC from CSV: {e}", "ERROR")
+            messagebox.showerror("Error", f"Failed to refresh STC: {e}")
+    
+    def update_stc(self):
+        """Update the STC counter value."""
+        try:
+            new_stc = int(self.stc_entry.get())
+            if new_stc < 0:
+                messagebox.showerror("Error", "STC value must be non-negative")
+                return
+            
+            if self.auto_printer:
+                self.auto_printer.set_stc_value(new_stc)
+                self.stc_label.config(text=str(new_stc))
+                self.log_message(f"STC counter updated to {new_stc}", "INFO")
+            else:
+                messagebox.showwarning("Warning", "Auto-printer not started. STC will be set when monitoring starts.")
+                
+        except ValueError:
+            messagebox.showerror("Error", "Please enter a valid number for STC")
+    
+    def print_selected_device(self):
+        """Print the selected device from the queue."""
+        try:
+            selection = self.queue_tree.selection()
+            if not selection:
+                messagebox.showwarning("Warning", "Please select a device to print")
+                return
+            
+            item = self.queue_tree.item(selection[0])
+            device_data = item['values']
+            
+            if not device_data:
+                messagebox.showerror("Error", "Invalid device data")
+                return
+            
+            # Get device info from queue
+            stc = device_data[0]
+            serial = device_data[1]
+            
+            # Ask for confirmation and allow STC editing
+            result = self.show_print_confirmation_dialog(device_data)
+            if result:
+                final_stc, should_print = result
+                if should_print and self.auto_printer:
+                    # Find device in queue and print it
+                    for i, device_entry in enumerate(self.auto_printer.pending_devices):
+                        if device_entry['device_data'].get('SERIAL_NUMBER') == serial:
+                            # Update STC if changed
+                            if final_stc != stc:
+                                device_entry['stc_assigned'] = final_stc
+                            
+                            success, zpl_filename = self.auto_printer.print_device_from_queue(i, final_stc)
+                            if success:
+                                self.log_message(f"Printed device {serial} with STC {final_stc}", "INFO")
+                                # Remove from GUI queue
+                                self.queue_tree.delete(selection[0])
+                                self.update_queue_display()
+                            else:
+                                self.log_message(f"Failed to print device {serial}", "ERROR")
+                            break
+                    
+        except Exception as e:
+            self.log_message(f"Error printing selected device: {e}", "ERROR")
+            messagebox.showerror("Error", f"Failed to print device: {e}")
+    
+    def print_all_devices(self):
+        """Print all devices in the queue."""
+        try:
+            if not self.auto_printer or not self.auto_printer.pending_devices:
+                messagebox.showinfo("Info", "No devices in queue")
+                return
+            
+            result = messagebox.askyesno("Confirm", 
+                f"Print all {len(self.auto_printer.pending_devices)} devices in queue?")
+            
+            if result:
+                printed_count = 0
+                failed_count = 0
+                
+                # Print all devices (process in reverse order to maintain indices)
+                for i in range(len(self.auto_printer.pending_devices) - 1, -1, -1):
+                    device_entry = self.auto_printer.pending_devices[i]
+                    stc = device_entry['stc_assigned']
+                    success, zpl_filename = self.auto_printer.print_device_from_queue(i, stc)
+                    
+                    if success:
+                        printed_count += 1
+                    else:
+                        failed_count += 1
+                
+                # Clear GUI queue
+                for item in self.queue_tree.get_children():
+                    self.queue_tree.delete(item)
+                
+                self.update_queue_display()
+                self.log_message(f"Batch print completed: {printed_count} success, {failed_count} failed", "INFO")
+                messagebox.showinfo("Complete", 
+                    f"Batch print completed:\n{printed_count} printed successfully\n{failed_count} failed")
+                
+        except Exception as e:
+            self.log_message(f"Error printing all devices: {e}", "ERROR")
+            messagebox.showerror("Error", f"Failed to print all devices: {e}")
+    
+    def remove_selected_device(self):
+        """Remove the selected device from the queue."""
+        try:
+            selection = self.queue_tree.selection()
+            if not selection:
+                messagebox.showwarning("Warning", "Please select a device to remove")
+                return
+            
+            item = self.queue_tree.item(selection[0])
+            device_data = item['values']
+            serial = device_data[1]
+            
+            result = messagebox.askyesno("Confirm", f"Remove device {serial} from queue?")
+            if result:
+                # Remove from auto-printer queue
+                if self.auto_printer:
+                    for i, device_entry in enumerate(self.auto_printer.pending_devices):
+                        if device_entry['device_data'].get('SERIAL_NUMBER') == serial:
+                            del self.auto_printer.pending_devices[i]
+                            break
+                
+                # Remove from GUI
+                self.queue_tree.delete(selection[0])
+                self.update_queue_display()
+                self.log_message(f"Removed device {serial} from queue", "INFO")
+                
+        except Exception as e:
+            self.log_message(f"Error removing device: {e}", "ERROR")
+            messagebox.showerror("Error", f"Failed to remove device: {e}")
+    
+    def clear_device_queue(self):
+        """Clear all devices from the queue."""
+        try:
+            if not self.auto_printer or not self.auto_printer.pending_devices:
+                messagebox.showinfo("Info", "Queue is already empty")
+                return
+            
+            count = len(self.auto_printer.pending_devices)
+            result = messagebox.askyesno("Confirm", f"Clear all {count} devices from queue?")
+            
+            if result:
+                self.auto_printer.pending_devices.clear()
+                for item in self.queue_tree.get_children():
+                    self.queue_tree.delete(item)
+                self.update_queue_display()
+                self.log_message(f"Cleared {count} devices from queue", "INFO")
+                
+        except Exception as e:
+            self.log_message(f"Error clearing queue: {e}", "ERROR")
+            messagebox.showerror("Error", f"Failed to clear queue: {e}")
+    
+    def show_print_confirmation_dialog(self, device_data):
+        """Show a dialog for print confirmation with STC editing."""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Print Confirmation")
+        dialog.geometry("400x300")
+        dialog.resizable(False, False)
+        dialog.grab_set()  # Make it modal
+        
+        # Center the dialog
+        dialog.transient(self.root)
+        
+        result = {'stc': device_data[0], 'print': False}
+        
+        # Device info
+        info_frame = ttk.LabelFrame(dialog, text="Device Information")
+        info_frame.pack(fill="x", padx=10, pady=5)
+        
+        labels = ["STC:", "Serial:", "IMEI:", "IMSI:", "CCID:", "MAC:"]
+        for i, (label, value) in enumerate(zip(labels, device_data[:6])):
+            ttk.Label(info_frame, text=label).grid(row=i, column=0, sticky="w", padx=5, pady=2)
+            ttk.Label(info_frame, text=str(value), font=("Consolas", 9)).grid(row=i, column=1, sticky="w", padx=5, pady=2)
+        
+        # STC editing
+        stc_frame = ttk.LabelFrame(dialog, text="STC Value")
+        stc_frame.pack(fill="x", padx=10, pady=5)
+        
+        ttk.Label(stc_frame, text="STC Value:").grid(row=0, column=0, sticky="w", padx=5, pady=5)
+        stc_entry = ttk.Entry(stc_frame, width=10)
+        stc_entry.insert(0, str(device_data[0]))
+        stc_entry.grid(row=0, column=1, sticky="w", padx=5, pady=5)
+        
+        # Buttons
+        button_frame = ttk.Frame(dialog)
+        button_frame.pack(fill="x", padx=10, pady=10)
+        
+        def on_print():
+            try:
+                result['stc'] = int(stc_entry.get())
+                result['print'] = True
+                dialog.destroy()
+            except ValueError:
+                messagebox.showerror("Error", "Please enter a valid STC number")
+        
+        def on_cancel():
+            result['print'] = False
+            dialog.destroy()
+        
+        ttk.Button(button_frame, text="Print", command=on_print).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Cancel", command=on_cancel).pack(side="left", padx=5)
+        
+        # Wait for dialog to close
+        dialog.wait_window()
+        
+        if result['print']:
+            return result['stc'], True
+        return None
+    
+    def update_device_queue_display(self):
+        """Update the device queue table display."""
+        try:
+            # Clear existing items
+            for item in self.queue_tree.get_children():
+                self.queue_tree.delete(item)
+            
+            # Add devices from queue
+            if self.auto_printer and self.auto_printer.pending_devices:
+                for device_entry in self.auto_printer.pending_devices:
+                    device_data = device_entry['device_data']
+                    stc = device_entry['stc_assigned']
+                    timestamp = device_entry['timestamp']
+                    values = (
+                        stc,
+                        device_data.get('SERIAL_NUMBER', ''),
+                        device_data.get('IMEI', ''),
+                        device_data.get('IMSI', ''),
+                        device_data.get('CCID', ''),
+                        device_data.get('MAC_ADDRESS', ''),
+                        timestamp.split(' ')[1] if ' ' in timestamp else timestamp  # Just time part
+                    )
+                    self.queue_tree.insert("", "end", values=values)
+                    
+        except Exception as e:
+            self.log_message(f"Error updating device queue display: {e}", "ERROR")
+    
+    def update_queue_display(self):
+        """Update the device queue display."""
+        try:
+            if self.auto_printer:
+                self.queue_size_label.config(text=str(len(self.auto_printer.pending_devices)))
+            else:
+                self.queue_size_label.config(text="0")
+        except Exception as e:
+            self.log_message(f"Error updating queue display: {e}", "ERROR")
+    
     def log_message(self, message, level="INFO"):
         """Add message to log display."""
         timestamp = datetime.now().strftime("%H:%M:%S")
@@ -605,6 +999,15 @@ class AutoPrinterGUI:
                     self.success_label.config(text=str(stats.get('successful_prints', 0)))
                     self.failed_label.config(text=str(stats.get('failed_prints', 0)))
                     self.errors_label.config(text=str(stats.get('parse_errors', 0)))
+                
+                elif msg_type == 'stc':
+                    # Update STC display
+                    self.stc_label.config(text=str(data))
+                
+                elif msg_type == 'queue_update':
+                    # Update device queue display
+                    self.update_device_queue_display()
+                    self.update_queue_display()
                 
         except queue.Empty:
             pass
