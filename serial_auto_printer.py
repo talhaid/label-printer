@@ -422,12 +422,13 @@ class DeviceAutoPrinter:
         self.auto_increment_stc = enabled
         logger.info(f"STC auto-increment {'enabled' if enabled else 'disabled'}")
     
-    def add_device_to_queue(self, device_data: Dict[str, str], raw_data: str):
-        """Add device to pending queue for manual print confirmation."""
+    def add_device_to_queue(self, device_data: Dict[str, str], raw_data: str) -> int:
+        """Add device to pending queue for manual print confirmation. Returns assigned STC."""
+        stc_assigned = self.get_next_stc()
         device_entry = {
             'device_data': device_data,
             'raw_data': raw_data,
-            'stc_assigned': self.get_next_stc(),
+            'stc_assigned': stc_assigned,
             'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             'status': 'PENDING'
         }
@@ -437,7 +438,8 @@ class DeviceAutoPrinter:
         if self.device_queue_callback:
             self.device_queue_callback(device_entry)
         
-        logger.info(f"Device {device_data.get('SERIAL_NUMBER', 'UNKNOWN')} added to queue with STC {device_entry['stc_assigned']}")
+        logger.info(f"Device {device_data.get('SERIAL_NUMBER', 'UNKNOWN')} added to queue with STC {stc_assigned}")
+        return stc_assigned
     
     def print_device_from_queue(self, device_index: int, custom_stc: int = None) -> bool:
         """Print a device from the pending queue."""
@@ -585,7 +587,7 @@ class DeviceAutoPrinter:
             logger.error(f"Failed to log to CSV: {e}")
     
     def _handle_serial_data(self, raw_data: str):
-        """Handle incoming serial data."""
+        """Handle incoming serial data. Returns (device_data, stc_assigned) if successful, None if failed."""
         logger.info(f"Received data: {raw_data}")
         
         # Parse device data
@@ -602,16 +604,19 @@ class DeviceAutoPrinter:
                 'MAC_ADDRESS': '',
                 'STC': ''
             }, 'PARSE_ERROR', '', raw_data)
-            return
+            return None
         
         self.stats['devices_processed'] += 1
         
         # Print label and save files immediately
-        success, zpl_filename = self.print_device_label_with_save(device_data, raw_data)
+        success, zpl_filename, stc_assigned = self.print_device_label_with_save(device_data, raw_data)
         if success:
             self.stats['successful_prints'] += 1
+            # Return device data and STC for GUI display
+            return device_data, stc_assigned
         else:
             self.stats['failed_prints'] += 1
+            return None
         
         # Log statistics
         self._log_stats()
@@ -625,22 +630,26 @@ class DeviceAutoPrinter:
             raw_data (str): Original raw data from serial port
             
         Returns:
-            tuple: (success: bool, zpl_filename: str)
+            tuple: (success: bool, zpl_filename: str, stc_assigned: str)
         """
         zpl_filename = ""
         print_status = "FAILED"
+        stc_assigned = ""
         
         try:
             # Assign STC value if not already present
             if 'STC' not in device_data or not device_data['STC']:
-                device_data['STC'] = str(self.get_next_stc())
+                stc_assigned = str(self.get_next_stc())
+                device_data['STC'] = stc_assigned
+            else:
+                stc_assigned = device_data['STC']
             
             # Validate template
             if not self.template.validate_template(device_data):
                 logger.error("Template validation failed")
                 print_status = "TEMPLATE_ERROR"
                 self._log_to_csv(device_data, print_status, zpl_filename, raw_data)
-                return False, zpl_filename
+                return False, zpl_filename, stc_assigned
             
             # Render ZPL
             zpl_commands = self.template.render(device_data)
@@ -662,13 +671,13 @@ class DeviceAutoPrinter:
             # Log to CSV
             self._log_to_csv(device_data, print_status, zpl_filename, raw_data)
             
-            return success, zpl_filename
+            return success, zpl_filename, stc_assigned
             
         except Exception as e:
             logger.error(f"Error printing device label: {e}")
             print_status = f"ERROR: {str(e)}"
             self._log_to_csv(device_data, print_status, zpl_filename, raw_data)
-            return False, zpl_filename
+            return False, zpl_filename, stc_assigned
     
     def print_device_label(self, device_data: Dict[str, str]) -> bool:
         """
@@ -680,7 +689,7 @@ class DeviceAutoPrinter:
         Returns:
             bool: True if printing successful
         """
-        success, _ = self.print_device_label_with_save(device_data, "")
+        success, _, _ = self.print_device_label_with_save(device_data, "")
         return success
     
     def start(self) -> bool:

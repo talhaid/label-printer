@@ -85,6 +85,9 @@ class AutoPrinterGUI:
         # Initialize STC counter from CSV
         self.initialize_stc_from_csv()
         
+        # Initialize mode display
+        self.update_mode_display()
+        
         # Start GUI update timer
         self.root.after(100, self.process_gui_queue)
     
@@ -130,7 +133,7 @@ class AutoPrinterGUI:
         # Baud rate
         ttk.Label(conn_frame, text="Baud Rate:").grid(row=2, column=0, sticky="w", padx=5, pady=2)
         self.baud_combo = ttk.Combobox(conn_frame, values=["9600", "19200", "38400", "57600", "115200"], width=20)
-        self.baud_combo.set("9600")
+        self.baud_combo.set("115200")  # Default to 115200
         self.baud_combo.grid(row=2, column=1, sticky="w", padx=5, pady=2)
         
         # STC Counter Control
@@ -155,9 +158,9 @@ class AutoPrinterGUI:
         
         self.auto_print_mode = tk.BooleanVar(value=True)  # Default to auto-print
         ttk.Radiobutton(mode_frame, text="Auto Print (Print immediately when data received)", 
-                       variable=self.auto_print_mode, value=True).pack(anchor="w", padx=5, pady=2)
+                       variable=self.auto_print_mode, value=True, command=self.update_mode_display).pack(anchor="w", padx=5, pady=2)
         ttk.Radiobutton(mode_frame, text="Queue Mode (Add to queue for manual confirmation)", 
-                       variable=self.auto_print_mode, value=False).pack(anchor="w", padx=5, pady=2)
+                       variable=self.auto_print_mode, value=False, command=self.update_mode_display).pack(anchor="w", padx=5, pady=2)
         
         # Control Buttons
         control_frame = ttk.LabelFrame(main_frame, text="Control")
@@ -172,50 +175,62 @@ class AutoPrinterGUI:
         self.test_button = ttk.Button(control_frame, text="Test Print", command=self.test_print)
         self.test_button.pack(side="left", padx=5, pady=5)
         
-        # Device Queue
-        queue_frame = ttk.LabelFrame(main_frame, text="Device Queue - Awaiting Print Confirmation")
-        queue_frame.pack(fill="both", expand=True, padx=5, pady=5)
+        # Device Data Table
+        data_frame = ttk.LabelFrame(main_frame, text="Device Data Table")
+        data_frame.pack(fill="both", expand=True, padx=5, pady=5)
         
-        # Queue table
-        queue_table_frame = ttk.Frame(queue_frame)
-        queue_table_frame.pack(fill="both", expand=True, padx=5, pady=5)
+        # Data table
+        data_table_frame = ttk.Frame(data_frame)
+        data_table_frame.pack(fill="both", expand=True, padx=5, pady=5)
         
-        # Create treeview for device queue
-        columns = ("STC", "Serial", "IMEI", "IMSI", "CCID", "MAC", "Received")
-        self.queue_tree = ttk.Treeview(queue_table_frame, columns=columns, show="headings", height=8)
+        # Create treeview for device data
+        columns = ("STC", "Serial", "IMEI", "IMSI", "CCID", "MAC", "Status", "Time")
+        self.data_tree = ttk.Treeview(data_table_frame, columns=columns, show="headings", height=8)
         
         # Configure columns
-        self.queue_tree.heading("STC", text="STC")
-        self.queue_tree.heading("Serial", text="Serial Number")
-        self.queue_tree.heading("IMEI", text="IMEI")
-        self.queue_tree.heading("IMSI", text="IMSI")
-        self.queue_tree.heading("CCID", text="CCID")
-        self.queue_tree.heading("MAC", text="MAC Address")
-        self.queue_tree.heading("Received", text="Received Time")
+        self.data_tree.heading("STC", text="STC")
+        self.data_tree.heading("Serial", text="Serial Number")
+        self.data_tree.heading("IMEI", text="IMEI")
+        self.data_tree.heading("IMSI", text="IMSI")
+        self.data_tree.heading("CCID", text="CCID")
+        self.data_tree.heading("MAC", text="MAC Address")
+        self.data_tree.heading("Status", text="Status")
+        self.data_tree.heading("Time", text="Time")
         
-        self.queue_tree.column("STC", width=80)
-        self.queue_tree.column("Serial", width=120)
-        self.queue_tree.column("IMEI", width=120)
-        self.queue_tree.column("IMSI", width=120)
-        self.queue_tree.column("CCID", width=120)
-        self.queue_tree.column("MAC", width=120)
-        self.queue_tree.column("Received", width=120)
+        self.data_tree.column("STC", width=80)
+        self.data_tree.column("Serial", width=120)
+        self.data_tree.column("IMEI", width=120)
+        self.data_tree.column("IMSI", width=120)
+        self.data_tree.column("CCID", width=120)
+        self.data_tree.column("MAC", width=120)
+        self.data_tree.column("Status", width=100)
+        self.data_tree.column("Time", width=120)
         
-        # Scrollbar for queue table
-        queue_scrollbar = ttk.Scrollbar(queue_table_frame, orient="vertical", command=self.queue_tree.yview)
-        self.queue_tree.configure(yscrollcommand=queue_scrollbar.set)
+        # Scrollbar for data table
+        data_scrollbar = ttk.Scrollbar(data_table_frame, orient="vertical", command=self.data_tree.yview)
+        self.data_tree.configure(yscrollcommand=data_scrollbar.set)
         
-        self.queue_tree.pack(side="left", fill="both", expand=True)
-        queue_scrollbar.pack(side="right", fill="y")
+        self.data_tree.pack(side="left", fill="both", expand=True)
+        data_scrollbar.pack(side="right", fill="y")
         
-        # Queue control buttons
-        queue_buttons_frame = ttk.Frame(queue_frame)
-        queue_buttons_frame.pack(fill="x", padx=5, pady=5)
+        # Data control buttons (only show for queue mode)
+        data_buttons_frame = ttk.Frame(data_frame)
+        data_buttons_frame.pack(fill="x", padx=5, pady=5)
         
-        ttk.Button(queue_buttons_frame, text="Print Selected", command=self.print_selected_device).pack(side="left", padx=5)
-        ttk.Button(queue_buttons_frame, text="Print All", command=self.print_all_devices).pack(side="left", padx=5)
-        ttk.Button(queue_buttons_frame, text="Remove Selected", command=self.remove_selected_device).pack(side="left", padx=5)
-        ttk.Button(queue_buttons_frame, text="Clear Queue", command=self.clear_device_queue).pack(side="left", padx=5)
+        self.print_selected_btn = ttk.Button(data_buttons_frame, text="Print Selected", command=self.print_selected_device)
+        self.print_selected_btn.pack(side="left", padx=5)
+        
+        self.print_all_btn = ttk.Button(data_buttons_frame, text="Print All", command=self.print_all_devices)
+        self.print_all_btn.pack(side="left", padx=5)
+        
+        self.remove_selected_btn = ttk.Button(data_buttons_frame, text="Remove Selected", command=self.remove_selected_device)
+        self.remove_selected_btn.pack(side="left", padx=5)
+        
+        self.clear_queue_btn = ttk.Button(data_buttons_frame, text="Clear All", command=self.clear_device_queue)
+        self.clear_queue_btn.pack(side="left", padx=5)
+        
+        self.clear_table_btn = ttk.Button(data_buttons_frame, text="Clear Table", command=self.clear_data_table)
+        self.clear_table_btn.pack(side="left", padx=5)
         
         # Status Frame
         status_frame = ttk.LabelFrame(main_frame, text="Status")
@@ -245,7 +260,7 @@ class AutoPrinterGUI:
         self.errors_label = ttk.Label(stats_frame, text="0")
         self.errors_label.grid(row=1, column=3, sticky="w", padx=(5, 20))
         
-        ttk.Label(stats_frame, text="Queue Size:").grid(row=0, column=4, sticky="w")
+        ttk.Label(stats_frame, text="In Queue/Processed:").grid(row=0, column=4, sticky="w")
         self.queue_size_label = ttk.Label(stats_frame, text="0", font=("Arial", 10, "bold"))
         self.queue_size_label.grid(row=0, column=5, sticky="w", padx=(5, 20))
         
@@ -412,7 +427,10 @@ class AutoPrinterGUI:
             port_names = [port['device'] for port in ports]
             self.port_combo['values'] = port_names
             
-            if port_names:
+            # Try to set COM3 as default, otherwise use first available
+            if 'COM3' in port_names:
+                self.port_combo.set('COM3')
+            elif port_names:
                 self.port_combo.set(port_names[0])
                 
         except Exception as e:
@@ -467,14 +485,24 @@ class AutoPrinterGUI:
                 
                 # Check current mode and handle accordingly
                 if self.auto_print_mode.get():
-                    # Auto-print mode: use original behavior
-                    self.auto_printer._handle_serial_data(data)
+                    # Auto-print mode: use original behavior and add to table
+                    result = self.auto_printer._handle_serial_data(data)
+                    if result:  # If device was successfully processed
+                        device_data, stc_assigned = result
+                        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        # Add to data table with STC and printed status
+                        device_data['STC'] = stc_assigned
+                        self.gui_queue.put(('add_to_table', (device_data, 'Printed', timestamp)))
                 else:
                     # Queue mode: parse data and add to queue manually
                     device_data = self.auto_printer.parser.parse_data(data)
                     if device_data:
                         self.auto_printer.stats['devices_processed'] += 1
-                        self.auto_printer.add_device_to_queue(device_data, data)
+                        stc_assigned = self.auto_printer.add_device_to_queue(device_data, data)
+                        if stc_assigned:
+                            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            device_data['STC'] = stc_assigned
+                            self.gui_queue.put(('add_to_table', (device_data, 'Queued', timestamp)))
                     else:
                         self.auto_printer.stats['parse_errors'] += 1
                 
@@ -562,7 +590,7 @@ class AutoPrinterGUI:
             if self.is_monitoring and self.auto_printer:
                 if self.auto_print_mode.get():
                     # Auto-print mode: print immediately
-                    success, zpl_filename = self.auto_printer.print_device_label_with_save(device_data, test_data)
+                    success, zpl_filename, stc_assigned = self.auto_printer.print_device_label_with_save(device_data, test_data)
                     if success:
                         self.log_message("Test device printed successfully!", "INFO")
                         messagebox.showinfo("Success", "Test device printed successfully!")
@@ -948,31 +976,107 @@ class AutoPrinterGUI:
         return None
     
     def update_device_queue_display(self):
-        """Update the device queue table display."""
+        """Update the device data table display based on current mode."""
         try:
             # Clear existing items
-            for item in self.queue_tree.get_children():
-                self.queue_tree.delete(item)
+            for item in self.data_tree.get_children():
+                self.data_tree.delete(item)
             
-            # Add devices from queue
-            if self.auto_printer and self.auto_printer.pending_devices:
-                for device_entry in self.auto_printer.pending_devices:
-                    device_data = device_entry['device_data']
-                    stc = device_entry['stc_assigned']
-                    timestamp = device_entry['timestamp']
-                    values = (
-                        stc,
-                        device_data.get('SERIAL_NUMBER', ''),
-                        device_data.get('IMEI', ''),
-                        device_data.get('IMSI', ''),
-                        device_data.get('CCID', ''),
-                        device_data.get('MAC_ADDRESS', ''),
-                        timestamp.split(' ')[1] if ' ' in timestamp else timestamp  # Just time part
-                    )
-                    self.queue_tree.insert("", "end", values=values)
+            if not self.auto_printer:
+                return
+                
+            if self.auto_print_mode.get():
+                # Auto-print mode: We don't maintain a queue, but we can show recent activity
+                # This will be updated through the add_device_to_data_table method
+                pass
+            else:
+                # Queue mode: Show pending devices from queue
+                if self.auto_printer.pending_devices:
+                    for device_entry in self.auto_printer.pending_devices:
+                        device_data = device_entry['device_data']
+                        stc = device_entry['stc_assigned']
+                        timestamp = device_entry['timestamp']
+                        status = device_entry['status']
+                        
+                        values = (
+                            stc,
+                            device_data.get('SERIAL_NUMBER', ''),
+                            device_data.get('IMEI', ''),
+                            device_data.get('IMSI', ''),
+                            device_data.get('CCID', ''),
+                            device_data.get('MAC_ADDRESS', ''),
+                            status,
+                            timestamp.split(' ')[1] if ' ' in timestamp else timestamp  # Just time part
+                        )
+                        self.data_tree.insert("", "end", values=values)
                     
         except Exception as e:
             self.log_message(f"Error updating device queue display: {e}", "ERROR")
+    
+    def update_mode_display(self):
+        """Update the display based on current mode (auto-print vs queue)."""
+        try:
+            is_queue_mode = not self.auto_print_mode.get()
+            
+            # Show/hide queue control buttons based on mode
+            if is_queue_mode:
+                self.print_selected_btn.pack(side="left", padx=5)
+                self.print_all_btn.pack(side="left", padx=5)
+                self.remove_selected_btn.pack(side="left", padx=5)
+                self.clear_queue_btn.pack(side="left", padx=5)
+            else:
+                self.print_selected_btn.pack_forget()
+                self.print_all_btn.pack_forget()
+                self.remove_selected_btn.pack_forget()
+                self.clear_queue_btn.pack_forget()
+            
+            # Update data table title and column headers
+            if is_queue_mode:
+                # Queue mode - show pending devices
+                self.data_tree.heading("Status", text="Status")
+            else:
+                # Auto-print mode - show processed devices
+                self.data_tree.heading("Status", text="Print Status")
+            
+            self.log_message(f"Mode changed to: {'Queue Mode' if is_queue_mode else 'Auto Print Mode'}", "INFO")
+                
+        except Exception as e:
+            self.log_message(f"Error updating mode display: {e}", "ERROR")
+    
+    def add_device_to_data_table(self, device_data, status, timestamp):
+        """Add a device to the data table display."""
+        try:
+            values = (
+                device_data.get('STC', ''),
+                device_data.get('SERIAL_NUMBER', ''),
+                device_data.get('IMEI', ''),
+                device_data.get('IMSI', ''),
+                device_data.get('CCID', ''),
+                device_data.get('MAC_ADDRESS', ''),
+                status,
+                timestamp.split(' ')[1] if ' ' in timestamp else timestamp  # Just time part
+            )
+            
+            # Insert at the top of the table (most recent first)
+            self.data_tree.insert("", 0, values=values)
+            
+            # Keep only last 100 entries to prevent memory issues
+            children = self.data_tree.get_children()
+            if len(children) > 100:
+                for child in children[100:]:
+                    self.data_tree.delete(child)
+                    
+        except Exception as e:
+            self.log_message(f"Error adding device to data table: {e}", "ERROR")
+    
+    def clear_data_table(self):
+        """Clear all entries from the data table."""
+        try:
+            for item in self.data_tree.get_children():
+                self.data_tree.delete(item)
+            self.log_message("Data table cleared", "INFO")
+        except Exception as e:
+            self.log_message(f"Error clearing data table: {e}", "ERROR")
     
     def update_queue_display(self):
         """Update the device queue display."""
@@ -1031,6 +1135,11 @@ class AutoPrinterGUI:
                     # Update device queue display
                     self.update_device_queue_display()
                     self.update_queue_display()
+                
+                elif msg_type == 'add_to_table':
+                    # Add device to data table
+                    device_data, status, timestamp = data
+                    self.add_device_to_data_table(device_data, status, timestamp)
                 
         except queue.Empty:
             pass
