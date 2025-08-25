@@ -4,12 +4,15 @@
 # Windows printer support (REQUIRED)
 pywin32>=306            # For Windows printer communication
 
-# Optional: PDF processing (if you ever need it)
-# PyMuPDF>=1.23.0       # For PDF processing (uncomment if needed)
-# Pillow>=10.0.0        # For image processing (uncomment if needed)
+# Serial port communication (REQUIRED for auto-printing)
+pyserial>=3.5           # For serial port monitoring
 
 # Optional: Report generation for sample PDFs
 reportlab>=4.0.0        # For creating sample labels and reports
+
+# Optional: PDF processing (if you ever need it)
+# PyMuPDF>=1.23.0       # For PDF processing (uncomment if needed)
+# Pillow>=10.0.0        # For image processing (uncomment if needed)
 
 # Development and testing (optional)
 # pytest>=7.4.0         # For unit testing (uncomment for development)
