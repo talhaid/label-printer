@@ -461,11 +461,23 @@ class AutoPrinterGUI:
             if actual_stc != initial_stc:
                 self.log_message(f"STC auto-adjusted from {initial_stc} to {actual_stc} based on CSV history", "INFO")
             
-            # Override the data callback to update GUI
-            original_callback = self.auto_printer._handle_serial_data
+            # Override the data callback to handle GUI mode switching
             def gui_callback(data):
                 self.gui_queue.put(('data', data))
-                original_callback(data)
+                
+                # Check current mode and handle accordingly
+                if self.auto_print_mode.get():
+                    # Auto-print mode: use original behavior
+                    self.auto_printer._handle_serial_data(data)
+                else:
+                    # Queue mode: parse data and add to queue manually
+                    device_data = self.auto_printer.parser.parse_data(data)
+                    if device_data:
+                        self.auto_printer.stats['devices_processed'] += 1
+                        self.auto_printer.add_device_to_queue(device_data, data)
+                    else:
+                        self.auto_printer.stats['parse_errors'] += 1
+                
                 self.gui_queue.put(('stats', self.auto_printer.stats))
                 # Update STC display
                 self.gui_queue.put(('stc', self.auto_printer.current_stc))
@@ -546,15 +558,26 @@ class AutoPrinterGUI:
             # Show parsed data
             self.log_message(f"Parsed data: {device_data}", "INFO")
             
-            # If monitoring is active, add to queue instead of printing directly
+            # Check current mode - if monitoring is active, use the same mode as monitoring
             if self.is_monitoring and self.auto_printer:
-                self.auto_printer.add_device_to_queue(device_data, test_data)
-                self.update_device_queue_display()
-                self.update_queue_display()
-                messagebox.showinfo("Success", "Test device added to queue for manual printing!")
+                if self.auto_print_mode.get():
+                    # Auto-print mode: print immediately
+                    success, zpl_filename = self.auto_printer.print_device_label_with_save(device_data, test_data)
+                    if success:
+                        self.log_message("Test device printed successfully!", "INFO")
+                        messagebox.showinfo("Success", "Test device printed successfully!")
+                    else:
+                        self.log_message("Test device print failed", "ERROR")
+                        messagebox.showerror("Error", "Test device print failed")
+                else:
+                    # Queue mode: add to queue
+                    self.auto_printer.add_device_to_queue(device_data, test_data)
+                    self.update_device_queue_display()
+                    self.update_queue_display()
+                    messagebox.showinfo("Success", "Test device added to queue for manual printing!")
                 return
             
-            # Print if auto-print is enabled and not monitoring
+            # If not monitoring, use the old direct print logic
             if self.auto_print_var.get():
                 template = self.template_text.get("1.0", "end-1c")
                 printer_name = self.printer_combo.get()
