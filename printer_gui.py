@@ -93,6 +93,9 @@ class AutoPrinterGUI:
     
     def setup_gui(self):
         """Setup the GUI layout."""
+        # Create menu bar
+        self.setup_menu()
+        
         # Create main notebook for tabs
         notebook = ttk.Notebook(self.root)
         notebook.pack(fill="both", expand=True, padx=10, pady=10)
@@ -1149,6 +1152,274 @@ class AutoPrinterGUI:
         # Schedule next update
         self.root.after(100, self.process_gui_queue)
     
+    def setup_menu(self):
+        """Setup the menu bar."""
+        menubar = tk.Menu(self.root)
+        self.root.config(menu=menubar)
+        
+        # Windows menu
+        windows_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Windows", menu=windows_menu)
+        windows_menu.add_command(label="Koli", command=self.open_koli_window)
+        
+        # Help menu
+        help_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Help", menu=help_menu)
+        help_menu.add_command(label="About", command=self.show_about)
+    
+    def open_koli_window(self):
+        """Open the Koli window."""
+        if hasattr(self, 'koli_window') and self.koli_window.winfo_exists():
+            self.koli_window.lift()
+            return
+        
+        self.create_koli_window()
+    
+    def create_koli_window(self):
+        """Create the Koli window with CSV data table."""
+        self.koli_window = tk.Toplevel(self.root)
+        self.koli_window.title("Koli - CSV Data Viewer")
+        self.koli_window.geometry("800x600")
+        
+        # Main frame
+        main_frame = ttk.Frame(self.koli_window)
+        main_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        # Title
+        title_label = ttk.Label(main_frame, text="CSV Data Viewer", font=("Arial", 14, "bold"))
+        title_label.pack(pady=(0, 10))
+        
+        # Control frame
+        control_frame = ttk.Frame(main_frame)
+        control_frame.pack(fill="x", pady=(0, 10))
+        
+        ttk.Button(control_frame, text="Refresh Data", command=self.refresh_csv_data).pack(side="left", padx=(0, 10))
+        ttk.Button(control_frame, text="Export CSV", command=self.export_csv_data).pack(side="left", padx=(0, 10))
+        
+        # Search frame
+        search_frame = ttk.Frame(main_frame)
+        search_frame.pack(fill="x", pady=(0, 10))
+        
+        ttk.Label(search_frame, text="Search:").pack(side="left", padx=(0, 5))
+        self.csv_search_var = tk.StringVar()
+        self.csv_search_var.trace('w', self.filter_csv_data)
+        search_entry = ttk.Entry(search_frame, textvariable=self.csv_search_var, width=30)
+        search_entry.pack(side="left", padx=(0, 10))
+        
+        # Info label
+        self.csv_info_label = ttk.Label(search_frame, text="")
+        self.csv_info_label.pack(side="right")
+        
+        # Create treeview for CSV data
+        tree_frame = ttk.Frame(main_frame)
+        tree_frame.pack(fill="both", expand=True)
+        
+        # Define columns based on CSV structure
+        columns = ("Timestamp", "Serial Number", "IMEI", "IMSI", "CCID", "MAC Address", "STC", "Status", "ZPL File", "Raw Data")
+        
+        self.csv_tree = ttk.Treeview(tree_frame, columns=columns, show="headings", height=20)
+        
+        # Configure column headings and widths
+        self.csv_tree.heading("Timestamp", text="Timestamp")
+        self.csv_tree.heading("Serial Number", text="Serial Number")
+        self.csv_tree.heading("IMEI", text="IMEI")
+        self.csv_tree.heading("IMSI", text="IMSI")
+        self.csv_tree.heading("CCID", text="CCID")
+        self.csv_tree.heading("MAC Address", text="MAC Address")
+        self.csv_tree.heading("STC", text="STC")
+        self.csv_tree.heading("Status", text="Status")
+        self.csv_tree.heading("ZPL File", text="ZPL File")
+        self.csv_tree.heading("Raw Data", text="Raw Data")
+        
+        # Set column widths
+        self.csv_tree.column("Timestamp", width=120)
+        self.csv_tree.column("Serial Number", width=120)
+        self.csv_tree.column("IMEI", width=120)
+        self.csv_tree.column("IMSI", width=120)
+        self.csv_tree.column("CCID", width=120)
+        self.csv_tree.column("MAC Address", width=120)
+        self.csv_tree.column("STC", width=60)
+        self.csv_tree.column("Status", width=80)
+        self.csv_tree.column("ZPL File", width=150)
+        self.csv_tree.column("Raw Data", width=200)
+        
+        # Add scrollbars
+        v_scrollbar = ttk.Scrollbar(tree_frame, orient="vertical", command=self.csv_tree.yview)
+        h_scrollbar = ttk.Scrollbar(tree_frame, orient="horizontal", command=self.csv_tree.xview)
+        self.csv_tree.configure(yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
+        
+        # Pack treeview and scrollbars
+        self.csv_tree.pack(side="left", fill="both", expand=True)
+        v_scrollbar.pack(side="right", fill="y")
+        h_scrollbar.pack(side="bottom", fill="x")
+        
+        # Status bar
+        status_frame = ttk.Frame(main_frame)
+        status_frame.pack(fill="x", pady=(10, 0))
+        self.csv_status_label = ttk.Label(status_frame, text="Ready")
+        self.csv_status_label.pack(side="left")
+        
+        # Load initial data
+        self.refresh_csv_data()
+    
+    def refresh_csv_data(self):
+        """Refresh the CSV data in the table."""
+        try:
+            import csv
+            
+            # Clear existing data
+            for item in self.csv_tree.get_children():
+                self.csv_tree.delete(item)
+            
+            csv_file = "device_log.csv"
+            if not os.path.exists(csv_file):
+                self.csv_status_label.config(text="CSV file not found")
+                self.csv_info_label.config(text="No data")
+                return
+            
+            # Read CSV data
+            with open(csv_file, 'r', newline='', encoding='utf-8') as file:
+                csv_reader = csv.DictReader(file)
+                rows = list(csv_reader)
+                
+                # Sort by timestamp (most recent first)
+                rows.sort(key=lambda x: x.get('TIMESTAMP', ''), reverse=True)
+                
+                # Insert data into treeview
+                for row in rows:
+                    values = (
+                        row.get('timestamp', ''),
+                        row.get('serial_number', ''),
+                        row.get('imei', ''),
+                        row.get('imsi', ''),
+                        row.get('ccid', ''),
+                        row.get('mac_address', ''),
+                        row.get('stc', ''),
+                        row.get('print_status', ''),
+                        row.get('zpl_file', ''),
+                        row.get('raw_data', '')
+                    )
+                    self.csv_tree.insert("", "end", values=values)
+                
+                self.csv_status_label.config(text=f"Loaded {len(rows)} records")
+                self.csv_info_label.config(text=f"Total: {len(rows)} records")
+                
+        except Exception as e:
+            self.csv_status_label.config(text=f"Error loading CSV: {e}")
+            messagebox.showerror("Error", f"Failed to load CSV data: {e}")
+    
+    def filter_csv_data(self, *args):
+        """Filter CSV data based on search term."""
+        try:
+            search_term = self.csv_search_var.get().lower()
+            
+            # If no search term, refresh all data
+            if not search_term:
+                self.refresh_csv_data()
+                return
+            
+            # Clear current display
+            for item in self.csv_tree.get_children():
+                self.csv_tree.delete(item)
+            
+            csv_file = "device_log.csv"
+            if not os.path.exists(csv_file):
+                return
+            
+            # Read and filter CSV data
+            import csv
+            with open(csv_file, 'r', newline='', encoding='utf-8') as file:
+                csv_reader = csv.DictReader(file)
+                filtered_rows = []
+                
+                for row in csv_reader:
+                    # Search in all relevant fields
+                    searchable_text = ' '.join([
+                        row.get('timestamp', ''),
+                        row.get('serial_number', ''),
+                        row.get('imei', ''),
+                        row.get('imsi', ''),
+                        row.get('ccid', ''),
+                        row.get('mac_address', ''),
+                        row.get('stc', ''),
+                        row.get('print_status', '')
+                    ]).lower()
+                    
+                    if search_term in searchable_text:
+                        filtered_rows.append(row)
+                
+                # Sort by timestamp (most recent first)
+                filtered_rows.sort(key=lambda x: x.get('TIMESTAMP', ''), reverse=True)
+                
+                # Insert filtered data
+                for row in filtered_rows:
+                    values = (
+                        row.get('timestamp', ''),
+                        row.get('serial_number', ''),
+                        row.get('imei', ''),
+                        row.get('imsi', ''),
+                        row.get('ccid', ''),
+                        row.get('mac_address', ''),
+                        row.get('stc', ''),
+                        row.get('print_status', ''),
+                        row.get('zpl_file', ''),
+                        row.get('raw_data', '')
+                    )
+                    self.csv_tree.insert("", "end", values=values)
+                
+                self.csv_info_label.config(text=f"Showing: {len(filtered_rows)} records")
+                
+        except Exception as e:
+            self.csv_status_label.config(text=f"Error filtering data: {e}")
+    
+    def export_csv_data(self):
+        """Export filtered CSV data to a new file."""
+        try:
+            filename = filedialog.asksaveasfilename(
+                title="Export CSV Data",
+                defaultextension=".csv",
+                filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
+            )
+            
+            if not filename:
+                return
+            
+            # Get current displayed data from treeview
+            import csv
+            with open(filename, 'w', newline='', encoding='utf-8') as file:
+                fieldnames = ["timestamp", "serial_number", "imei", "imsi", "ccid", "mac_address", "stc", "print_status", "zpl_file", "raw_data"]
+                writer = csv.DictWriter(file, fieldnames=fieldnames)
+                
+                writer.writeheader()
+                
+                for item in self.csv_tree.get_children():
+                    values = self.csv_tree.item(item)['values']
+                    row_dict = dict(zip(fieldnames, values))
+                    writer.writerow(row_dict)
+            
+            messagebox.showinfo("Success", f"Data exported to {filename}")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to export data: {e}")
+    
+    def show_about(self):
+        """Show about dialog."""
+        about_text = """Zebra GC420T Auto-Printer GUI
+        
+Version: 2.0
+Date: August 2025
+
+Features:
+- Dual-mode operation (Auto-Print / Queue)
+- Real-time serial monitoring  
+- CSV data logging and viewing
+- ZPL template management
+- Comprehensive statistics
+
+For support and updates, check the project documentation."""
+        
+        messagebox.showinfo("About", about_text)
+
     def on_closing(self):
         """Handle application closing."""
         if self.is_monitoring:
