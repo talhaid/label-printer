@@ -26,6 +26,11 @@ import time
 from datetime import datetime
 import os
 import sys
+import pandas as pd
+import qrcode
+from reportlab.lib.units import cm, mm
+from reportlab.pdfgen import canvas
+from reportlab.lib.colors import black
 
 # Import our modules
 from serial_auto_printer import DeviceAutoPrinter, SerialPortMonitor, DeviceDataParser, ZPLTemplate
@@ -102,6 +107,9 @@ class AutoPrinterGUI:
         
         # Main Control Tab
         self.setup_main_tab(notebook)
+        
+        # Box Labels Tab
+        self.setup_box_labels_tab(notebook)
         
         # Template Tab
         self.setup_template_tab(notebook)
@@ -345,6 +353,94 @@ class AutoPrinterGUI:
         self.test_data_entry.pack(side="left", padx=5, pady=5)
         
         ttk.Button(test_frame, text="Test Parse & Print", command=self.test_data_processing).pack(side="left", padx=5, pady=5)
+    
+    def setup_box_labels_tab(self, notebook):
+        """Setup the box labels creation tab."""
+        box_frame = ttk.Frame(notebook)
+        notebook.add(box_frame, text="Box Labels")
+        
+        # Initialize box label variables
+        self.box_devices_df = None
+        self.box_current_page = 0
+        self.box_devices_per_page = 20
+        self.box_selected_devices = []
+        
+        # Top controls frame
+        box_control_frame = ttk.Frame(box_frame)
+        box_control_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        # CSV file selection
+        ttk.Label(box_control_frame, text="CSV File:").pack(side=tk.LEFT)
+        self.box_csv_path_var = tk.StringVar()
+        self.box_csv_entry = ttk.Entry(box_control_frame, textvariable=self.box_csv_path_var, width=40)
+        self.box_csv_entry.pack(side=tk.LEFT, padx=(5, 5))
+        
+        ttk.Button(box_control_frame, text="Browse", command=self.browse_box_csv).pack(side=tk.LEFT, padx=(0, 10))
+        ttk.Button(box_control_frame, text="Load", command=self.load_box_csv_data).pack(side=tk.LEFT, padx=(0, 20))
+        
+        # Page navigation
+        self.box_page_label = ttk.Label(box_control_frame, text="Page: 0/0")
+        self.box_page_label.pack(side=tk.LEFT, padx=(0, 10))
+        
+        ttk.Button(box_control_frame, text="◀ Prev", command=self.box_previous_page).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Button(box_control_frame, text="Next ▶", command=self.box_next_page).pack(side=tk.LEFT, padx=(0, 20))
+        
+        # Box number and create button
+        ttk.Label(box_control_frame, text="Box:").pack(side=tk.LEFT, padx=(0, 5))
+        self.box_number_var = tk.StringVar(value="BOX001")
+        ttk.Entry(box_control_frame, textvariable=self.box_number_var, width=10).pack(side=tk.LEFT, padx=(0, 10))
+        
+        ttk.Button(box_control_frame, text="Create PDF Label", command=self.create_box_pdf_label).pack(side=tk.RIGHT)
+        
+        # Selection info
+        self.box_selection_label = ttk.Label(box_control_frame, text="Selected: 0/20")
+        self.box_selection_label.pack(side=tk.RIGHT, padx=(0, 20))
+        
+        # Device list frame
+        list_frame = ttk.Frame(box_frame)
+        list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        
+        # Create device list with checkboxes
+        columns = ("select", "no", "serial", "imei", "mac", "status")
+        self.box_tree = ttk.Treeview(list_frame, columns=columns, show="headings", height=20)
+        
+        # Configure columns
+        self.box_tree.heading("select", text="☑")
+        self.box_tree.heading("no", text="No.")
+        self.box_tree.heading("serial", text="Serial Number")
+        self.box_tree.heading("imei", text="IMEI")
+        self.box_tree.heading("mac", text="MAC Address")
+        self.box_tree.heading("status", text="Status")
+        
+        # Column widths
+        self.box_tree.column("select", width=50, anchor=tk.CENTER)
+        self.box_tree.column("no", width=50, anchor=tk.CENTER)
+        self.box_tree.column("serial", width=180)
+        self.box_tree.column("imei", width=180)
+        self.box_tree.column("mac", width=140)
+        self.box_tree.column("status", width=100)
+        
+        # Scrollbar for device list
+        box_scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.box_tree.yview)
+        self.box_tree.configure(yscrollcommand=box_scrollbar.set)
+        
+        # Pack tree and scrollbar
+        self.box_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        box_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Bind click events for selection
+        self.box_tree.bind("<Button-1>", self.on_box_tree_click)
+        
+        # Instructions
+        info_text = """📋 Instructions:
+1. Load CSV file with device data (SERIAL_NUMBER, IMEI, MAC_ADDRESS columns required)
+2. Browse through pages of 20 devices using Previous/Next buttons
+3. Click on device rows to select them (max 20 per box)
+4. Enter box number (e.g., BOX001, BOX002)
+5. Click 'Create PDF Label' to generate box label with QR code and device list"""
+        
+        info_label = ttk.Label(box_frame, text=info_text, justify=tk.LEFT, wraplength=800)
+        info_label.pack(padx=10, pady=5, anchor=tk.W)
     
     def setup_template_tab(self, notebook):
         """Setup the template editing tab."""
@@ -1553,6 +1649,289 @@ For support and updates, check the project documentation."""
                     
         except Exception as e:
             self.log_message(f"Error adding PCB to table: {e}", "ERROR")
+
+    # Box Label Methods
+    def browse_box_csv(self):
+        """Browse for CSV file for box labels."""
+        file_path = filedialog.askopenfilename(
+            title="Select Device CSV File",
+            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
+        )
+        if file_path:
+            self.box_csv_path_var.set(file_path)
+            
+    def load_box_csv_data(self):
+        """Load data from CSV file for box labels."""
+        csv_path = self.box_csv_path_var.get()
+        if not csv_path or not os.path.exists(csv_path):
+            messagebox.showerror("Error", "Please select a valid CSV file")
+            return
+            
+        try:
+            # Try to load CSV with different encodings
+            encodings = ['utf-8', 'utf-8-sig', 'latin1', 'cp1252']
+            for encoding in encodings:
+                try:
+                    self.box_devices_df = pd.read_csv(csv_path, encoding=encoding)
+                    break
+                except UnicodeDecodeError:
+                    continue
+            else:
+                raise Exception("Could not decode CSV file with any encoding")
+                
+            # Validate required columns
+            required_columns = ['SERIAL_NUMBER', 'IMEI', 'MAC_ADDRESS']
+            missing_columns = [col for col in required_columns if col not in self.box_devices_df.columns]
+            
+            if missing_columns:
+                messagebox.showerror("Error", f"CSV missing required columns: {', '.join(missing_columns)}")
+                return
+                
+            # Add status column if not exists
+            if 'STATUS' not in self.box_devices_df.columns:
+                self.box_devices_df['STATUS'] = 'Available'
+                
+            self.box_current_page = 0
+            self.box_selected_devices = []
+            self.update_box_device_display()
+            self.log_message(f"Loaded {len(self.box_devices_df)} devices for box labels", "INFO")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load CSV: {str(e)}")
+            
+    def update_box_device_display(self):
+        """Update the box device list display for current page."""
+        if self.box_devices_df is None:
+            return
+            
+        # Clear existing items
+        for item in self.box_tree.get_children():
+            self.box_tree.delete(item)
+            
+        # Calculate page info
+        total_devices = len(self.box_devices_df)
+        total_pages = (total_devices + self.box_devices_per_page - 1) // self.box_devices_per_page
+        
+        if total_pages == 0:
+            self.box_page_label.config(text="Page: 0/0")
+            return
+            
+        # Get devices for current page
+        start_idx = self.box_current_page * self.box_devices_per_page
+        end_idx = min(start_idx + self.box_devices_per_page, total_devices)
+        page_devices = self.box_devices_df.iloc[start_idx:end_idx]
+        
+        # Add devices to tree
+        for idx, (_, device) in enumerate(page_devices.iterrows()):
+            global_idx = start_idx + idx
+            is_selected = global_idx in self.box_selected_devices
+            
+            self.box_tree.insert("", tk.END, values=(
+                "☑" if is_selected else "☐",
+                f"{global_idx + 1:02d}",
+                device['SERIAL_NUMBER'],
+                device['IMEI'],
+                device['MAC_ADDRESS'],
+                device.get('STATUS', 'Available')
+            ), tags=('selected' if is_selected else 'unselected',))
+            
+        # Configure tags
+        self.box_tree.tag_configure('selected', background='lightblue')
+        self.box_tree.tag_configure('unselected', background='white')
+        
+        # Update labels
+        self.box_page_label.config(text=f"Page: {self.box_current_page + 1}/{total_pages}")
+        self.box_selection_label.config(text=f"Selected: {len(self.box_selected_devices)}/20")
+        
+    def on_box_tree_click(self, event):
+        """Handle box tree item clicks for selection."""
+        item = self.box_tree.identify('item', event.x, event.y)
+        if not item:
+            return
+            
+        # Get the global index
+        values = self.box_tree.item(item, 'values')
+        device_no = int(values[1]) - 1  # Convert to 0-based index
+        
+        # Toggle selection
+        if device_no in self.box_selected_devices:
+            self.box_selected_devices.remove(device_no)
+        else:
+            if len(self.box_selected_devices) < 20:
+                self.box_selected_devices.append(device_no)
+            else:
+                messagebox.showwarning("Selection Limit", "Maximum 20 devices can be selected for one box")
+                return
+                
+        self.update_box_device_display()
+        
+    def box_previous_page(self):
+        """Go to previous page in box device list."""
+        if self.box_current_page > 0:
+            self.box_current_page -= 1
+            self.update_box_device_display()
+            
+    def box_next_page(self):
+        """Go to next page in box device list."""
+        if self.box_devices_df is not None:
+            total_pages = (len(self.box_devices_df) + self.box_devices_per_page - 1) // self.box_devices_per_page
+            if self.box_current_page < total_pages - 1:
+                self.box_current_page += 1
+                self.update_box_device_display()
+                
+    def create_box_qr_with_devices(self, devices):
+        """Create QR code with all device data for box label."""
+        qr_data = []
+        for i, device in enumerate(devices, 1):
+            qr_data.append(f"{i:02d}:{device['SERIAL_NUMBER']}:{device['IMEI']}:{device['MAC_ADDRESS']}")
+        
+        qr_string = "|".join(qr_data)
+        
+        qr = qrcode.QRCode(
+            version=None,
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=6,
+            border=1
+        )
+        qr.add_data(qr_string)
+        qr.make(fit=True)
+        
+        qr_image = qr.make_image(fill_color="black", back_color="white")
+        temp_path = f"temp_gui_qr_{datetime.now().strftime('%H%M%S_%f')}.png"
+        qr_image.save(temp_path)
+        return temp_path
+        
+    def generate_box_label_pdf(self, devices, box_number):
+        """Generate box label PDF using optimized template."""
+        width = 10 * cm
+        height = 15 * cm
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        first_serial = devices[0]['SERIAL_NUMBER']
+        last_serial = devices[-1]['SERIAL_NUMBER']
+        filename = f"gui_box_{box_number}_{first_serial}_{last_serial}_{timestamp}.pdf"
+        
+        c = canvas.Canvas(filename, pagesize=(width, height))
+        
+        # QR code at top, 1cm from edge
+        y = height - 10*mm
+        qr_path = self.create_box_qr_with_devices(devices)
+        qr_size = 40*mm
+        qr_x = (width - qr_size) / 2
+        qr_y = y - qr_size
+        
+        c.drawImage(qr_path, qr_x, qr_y, width=qr_size, height=qr_size)
+        
+        # Clean up QR
+        try:
+            os.remove(qr_path)
+        except:
+            pass
+            
+        # Header section below QR
+        y = qr_y - 6*mm
+        
+        # Company name
+        c.setFont("Helvetica-Bold", 10)
+        c.drawCentredString(width/2, y, "STC - SICAKLIK TAKIP CIHAZI")
+        y -= 6*mm
+        
+        # Date and box
+        c.setFont("Helvetica", 8)
+        c.drawCentredString(width/2, y, f"{datetime.now().strftime('%d/%m/%Y')} - {box_number}")
+        y -= 6*mm
+        
+        # Device list section
+        y -= 3*mm
+        
+        # Device list header
+        c.setFont("Helvetica-Bold", 7)
+        c.drawCentredString(width/2, y, "DEVICE LIST")
+        y -= 5*mm
+        
+        # Column headers
+        c.setFont("Helvetica-Bold", 6)
+        c.drawString(3*mm, y, "No.")
+        c.drawString(10*mm, y, "Serial Number")
+        c.drawString(42*mm, y, "IMEI")
+        c.drawString(70*mm, y, "MAC")
+        y -= 4*mm
+        
+        # Device entries
+        c.setFont("Courier", 5.5)
+        line_height = 3*mm
+        
+        for i, device in enumerate(devices, 1):
+            if y > 5*mm:
+                c.drawString(3*mm, y, f"{i:02d}")
+                c.drawString(10*mm, y, device['SERIAL_NUMBER'])
+                c.drawString(42*mm, y, device['IMEI'])
+                c.drawString(70*mm, y, device['MAC_ADDRESS'])
+                y -= line_height
+            else:
+                c.setFont("Helvetica", 5)
+                c.drawCentredString(width/2, y, "... (complete data in QR code)")
+                break
+                
+        c.save()
+        return filename
+        
+    def create_box_pdf_label(self):
+        """Create box label PDF for selected devices."""
+        if len(self.box_selected_devices) == 0:
+            messagebox.showwarning("No Selection", "Please select devices for the box label")
+            return
+            
+        if len(self.box_selected_devices) != 20:
+            result = messagebox.askyesno("Partial Selection", 
+                                       f"Only {len(self.box_selected_devices)} devices selected. "
+                                       f"Create label anyway?")
+            if not result:
+                return
+                
+        box_number = self.box_number_var.get().strip()
+        if not box_number:
+            messagebox.showerror("Error", "Please enter a box number")
+            return
+            
+        try:
+            # Get selected device data
+            selected_device_data = []
+            for idx in sorted(self.box_selected_devices):
+                device_row = self.box_devices_df.iloc[idx]
+                device_dict = {
+                    'SERIAL_NUMBER': device_row['SERIAL_NUMBER'],
+                    'IMEI': device_row['IMEI'],
+                    'MAC_ADDRESS': device_row['MAC_ADDRESS']
+                }
+                selected_device_data.append(device_dict)
+                
+            # Generate PDF
+            filename = self.generate_box_label_pdf(selected_device_data, box_number)
+            
+            # Log success
+            self.log_message(f"✅ Box label created: {filename} ({len(selected_device_data)} devices)", "INFO")
+            
+            # Show success message
+            messagebox.showinfo("Success", 
+                              f"Box label created successfully!\n\n"
+                              f"File: {filename}\n"
+                              f"Devices: {len(selected_device_data)}\n"
+                              f"Box: {box_number}")
+                              
+            # Clear selection
+            self.box_selected_devices = []
+            self.update_box_device_display()
+            
+            # Auto-increment box number
+            if box_number.startswith("BOX") and box_number[3:].isdigit():
+                new_number = int(box_number[3:]) + 1
+                self.box_number_var.set(f"BOX{new_number:03d}")
+                
+        except Exception as e:
+            error_msg = f"Failed to create box label: {str(e)}"
+            self.log_message(error_msg, "ERROR")
+            messagebox.showerror("Error", error_msg)
 
     def on_closing(self):
         """Handle application closing."""
