@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Vertical Box Label</title>
+    <style>
+        @page { 
+            size: 15cm 10cm; 
+            margin: 0; 
+        }
+        
+        body { 
+            margin: 0; 
+            padding: 2mm; 
+            font-family: Arial, sans-serif; 
+            font-size: 6px; 
+            width: 15cm; 
+            height: 10cm; 
+            box-sizing: border-box;
+            border: 1px solid #000;
+            border-radius: 3mm;
+        }
+        
+        .header {
+            display: flex;
+            height: 25mm;
+            gap: 2mm;
+            margin-bottom: 2mm;
+        }
+        
+        .qr-section {
+            width: 25mm;
+            height: 25mm;
+            border: 1px solid #000;
+            border-radius: 2mm;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .qr-code {
+            width: 23mm;
+            height: 23mm;
+        }
+        
+        .header-info {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding-left: 2mm;
+            font-size: 8px;
+            line-height: 1.3;
+        }
+        
+        .company-name {
+            font-size: 10px;
+            font-weight: bold;
+            margin-bottom: 1mm;
+        }
+        
+        .date {
+            font-size: 8px;
+            margin-bottom: 1mm;
+        }
+        
+        .box-number {
+            font-size: 8px;
+            font-weight: bold;
+        }
+        
+        .devices-section {
+            height: calc(100% - 27mm);
+            overflow: hidden;
+        }
+        
+        .device-header {
+            font-size: 6px;
+            font-weight: bold;
+            margin-bottom: 1mm;
+            padding: 1mm;
+            background-color: #f0f0f0;
+            text-align: center;
+        }
+        
+        .device-list {
+            white-space: pre-line;
+            font-family: 'Courier New', monospace;
+            font-size: 5px;
+            line-height: 1.2;
+            padding: 0 1mm;
+        }
+        
+        @media print { 
+            body { 
+                print-color-adjust: exact;
+                -webkit-print-color-adjust: exact;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="qr-section">
+            <img src="data:image/png;base64,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" class="qr-code" alt="QR">
+        </div>
+        <div class="header-info">
+            <div class="company-name">STC - SICAKLIK TAKİP CİHAZI</div>
+            <div class="date">26/08/2025</div>
+            <div class="box-number">BOX001</div>
+        </div>
+    </div>
+    
+    <div class="devices-section">
+        <div class="device-header">S/N | IMEI | MAC</div>
+        <div class="device-list">01- ATS542912423701 | 866988074133100 | AA:BB:CC:DD:EE:0A
+02- ATS542912423702 | 866988074133101 | AA:BB:CC:DD:EE:0B
+03- ATS542912423703 | 866988074133102 | AA:BB:CC:DD:EE:0C
+04- ATS542912423704 | 866988074133103 | AA:BB:CC:DD:EE:0D
+05- ATS542912423705 | 866988074133104 | AA:BB:CC:DD:EE:0E
+06- ATS542912423706 | 866988074133105 | AA:BB:CC:DD:EE:0F
+07- ATS542912423707 | 866988074133106 | AA:BB:CC:DD:EE:10
+08- ATS542912423708 | 866988074133107 | AA:BB:CC:DD:EE:11
+09- ATS542912423709 | 866988074133108 | AA:BB:CC:DD:EE:12
+10- ATS542912423710 | 866988074133109 | AA:BB:CC:DD:EE:13
+11- ATS542912423711 | 866988074133110 | AA:BB:CC:DD:EE:14
+12- ATS542912423712 | 866988074133111 | AA:BB:CC:DD:EE:15
+13- ATS542912423713 | 866988074133112 | AA:BB:CC:DD:EE:16
+14- ATS542912423714 | 866988074133113 | AA:BB:CC:DD:EE:17
+15- ATS542912423715 | 866988074133114 | AA:BB:CC:DD:EE:18
+16- ATS542912423716 | 866988074133115 | AA:BB:CC:DD:EE:19
+17- ATS542912423717 | 866988074133116 | AA:BB:CC:DD:EE:1A
+18- ATS542912423718 | 866988074133117 | AA:BB:CC:DD:EE:1B
+19- ATS542912423719 | 866988074133118 | AA:BB:CC:DD:EE:1C
+20- ATS542912423720 | 866988074133119 | AA:BB:CC:DD:EE:1D</div>
+    </div>
+</body>
+</html>

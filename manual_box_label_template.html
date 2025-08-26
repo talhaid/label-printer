@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Manual Box Label Template</title>
+    <style>
+        /* ===========================================
+           MANUAL DESIGN TEMPLATE
+           Edit these styles to customize your label
+           =========================================== */
+        
+        @page {
+            size: 15cm 10cm;    /* Label size - CHANGE THIS if needed */
+            margin: 0;
+        }
+        
+        body {
+            margin: 0;
+            padding: 3mm;       /* CHANGE: Overall padding */
+            font-family: Arial, sans-serif;  /* CHANGE: Font family */
+            font-size: 8px;     /* CHANGE: Base font size */
+            width: 15cm;
+            height: 10cm;
+            box-sizing: border-box;
+            background-color: white;  /* CHANGE: Background color */
+        }
+        
+        /* TITLE SECTION */
+        .header {
+            text-align: center;
+            margin-bottom: 3mm;  /* CHANGE: Space below header */
+            border-bottom: 1px solid #ccc;  /* CHANGE: Add/remove border */
+        }
+        
+        .title {
+            font-size: 14px;     /* CHANGE: Title size */
+            font-weight: bold;
+            margin-bottom: 2mm;
+            color: #000;         /* CHANGE: Title color */
+        }
+        
+        .info-line {
+            font-size: 8px;      /* CHANGE: Info text size */
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 2mm;
+            color: #666;         /* CHANGE: Info text color */
+        }
+        
+        /* MAIN CONTENT LAYOUT */
+        .content {
+            display: flex;
+            gap: 3mm;            /* CHANGE: Gap between table and QR */
+        }
+        
+        .devices-section {
+            flex: 1;
+            display: flex;
+            gap: 2mm;            /* CHANGE: Gap between columns */
+        }
+        
+        .device-column {
+            flex: 1;
+        }
+        
+        /* COLUMN HEADERS */
+        .column-title {
+            font-size: 7px;      /* CHANGE: Column title size */
+            font-weight: bold;
+            margin-bottom: 1mm;
+            text-align: center;
+            background-color: #f0f0f0;  /* CHANGE: Column header color */
+            padding: 1mm;
+            border: 1px solid #ccc;     /* CHANGE: Column header border */
+        }
+        
+        /* DEVICE TABLE STYLING */
+        .device-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 6px;      /* CHANGE: Table font size */
+        }
+        
+        .device-table th {
+            background-color: #e0e0e0;  /* CHANGE: Header background */
+            padding: 1mm;               /* CHANGE: Header padding */
+            border: 0.5px solid #999;   /* CHANGE: Header border */
+            font-size: 5px;             /* CHANGE: Header font size */
+            color: #000;                /* CHANGE: Header text color */
+        }
+        
+        .device-table td {
+            padding: 0.5mm;             /* CHANGE: Cell padding */
+            border: 0.5px solid #ccc;   /* CHANGE: Cell border */
+            text-align: left;           /* CHANGE: Text alignment */
+            color: #000;                /* CHANGE: Cell text color */
+        }
+        
+        .device-table tr:nth-child(even) {
+            background-color: #f9f9f9;  /* CHANGE: Alternate row color */
+        }
+        
+        .device-table tr:hover {
+            background-color: #e6f3ff;  /* CHANGE: Hover color */
+        }
+        
+        /* QR CODE SECTION */
+        .qr-section {
+            width: 25mm;         /* CHANGE: QR section width */
+            text-align: center;
+            border: 1px dashed #ccc;  /* CHANGE: QR section border */
+            padding: 2mm;
+        }
+        
+        .qr-code {
+            width: 20mm;         /* CHANGE: QR code size */
+            height: 20mm;
+            margin: 0 auto 2mm auto;
+            border: 1px solid #ddd;  /* CHANGE: QR border */
+        }
+        
+        .qr-label {
+            font-size: 5px;      /* CHANGE: QR label size */
+            margin-top: 1mm;
+            color: #666;         /* CHANGE: QR label color */
+        }
+        
+        /* FOOTER */
+        .footer {
+            position: absolute;
+            bottom: 2mm;         /* CHANGE: Footer position */
+            left: 3mm;
+            right: 3mm;
+            text-align: center;
+            font-size: 7px;      /* CHANGE: Footer font size */
+            font-weight: bold;
+            color: #000;         /* CHANGE: Footer color */
+            border-top: 1px solid #ccc;  /* CHANGE: Footer border */
+            padding-top: 1mm;
+        }
+        
+        /* PRINT OPTIMIZATION */
+        @media print {
+            body {
+                print-color-adjust: exact;
+                -webkit-print-color-adjust: exact;
+            }
+        }
+        
+        /* ===========================================
+           CUSTOM CLASSES - ADD YOUR OWN STYLES HERE
+           =========================================== */
+        
+        .custom-highlight {
+            background-color: yellow !important;
+        }
+        
+        .custom-border {
+            border: 2px solid red !important;
+        }
+        
+        .custom-font {
+            font-family: 'Courier New', monospace !important;
+        }
+    </style>
+</head>
+<body>
+    <!-- HEADER SECTION - Edit text and styling -->
+    <div class="header">
+        <div class="title">📦 CUSTOM BOX LABEL - DESIGN ME!</div>
+        <div class="info-line">
+            <span>Date: 26/08/2025</span>
+            <span>Devices: 20 units</span>
+        </div>
+    </div>
+    
+    <!-- MAIN CONTENT -->
+    <div class="content">
+        <!-- DEVICE TABLES -->
+        <div class="devices-section">
+            <!-- LEFT COLUMN -->
+            <div class="device-column">
+                <div class="column-title">📱 Devices 1-10</div>
+                <table class="device-table">
+                    <thead>
+                        <tr>
+                            <th>No.</th>
+                            <th>Serial Number</th>
+                            <th>IMEI</th>
+                            <th>MAC</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>01</td><td>DEV001TEST01</td><td>866988001</td><td>AA:BB:CC:01</td></tr>
+                        <tr><td>02</td><td>DEV002TEST02</td><td>866988002</td><td>AA:BB:CC:02</td></tr>
+                        <tr><td>03</td><td>DEV003TEST03</td><td>866988003</td><td>AA:BB:CC:03</td></tr>
+                        <tr><td>04</td><td>DEV004TEST04</td><td>866988004</td><td>AA:BB:CC:04</td></tr>
+                        <tr><td>05</td><td>DEV005TEST05</td><td>866988005</td><td>AA:BB:CC:05</td></tr>
+                        <tr><td>06</td><td>DEV006TEST06</td><td>866988006</td><td>AA:BB:CC:06</td></tr>
+                        <tr><td>07</td><td>DEV007TEST07</td><td>866988007</td><td>AA:BB:CC:07</td></tr>
+                        <tr><td>08</td><td>DEV008TEST08</td><td>866988008</td><td>AA:BB:CC:08</td></tr>
+                        <tr><td>09</td><td>DEV009TEST09</td><td>866988009</td><td>AA:BB:CC:09</td></tr>
+                        <tr><td>10</td><td>DEV010TEST10</td><td>866988010</td><td>AA:BB:CC:10</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- RIGHT COLUMN -->
+            <div class="device-column">
+                <div class="column-title">📱 Devices 11-20</div>
+                <table class="device-table">
+                    <thead>
+                        <tr>
+                            <th>No.</th>
+                            <th>Serial Number</th>
+                            <th>IMEI</th>
+                            <th>MAC</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>11</td><td>DEV011TEST11</td><td>866988011</td><td>AA:BB:CC:11</td></tr>
+                        <tr><td>12</td><td>DEV012TEST12</td><td>866988012</td><td>AA:BB:CC:12</td></tr>
+                        <tr><td>13</td><td>DEV013TEST13</td><td>866988013</td><td>AA:BB:CC:13</td></tr>
+                        <tr><td>14</td><td>DEV014TEST14</td><td>866988014</td><td>AA:BB:CC:14</td></tr>
+                        <tr><td>15</td><td>DEV015TEST15</td><td>866988015</td><td>AA:BB:CC:15</td></tr>
+                        <tr><td>16</td><td>DEV016TEST16</td><td>866988016</td><td>AA:BB:CC:16</td></tr>
+                        <tr><td>17</td><td>DEV017TEST17</td><td>866988017</td><td>AA:BB:CC:17</td></tr>
+                        <tr><td>18</td><td>DEV018TEST18</td><td>866988018</td><td>AA:BB:CC:18</td></tr>
+                        <tr><td>19</td><td>DEV019TEST19</td><td>866988019</td><td>AA:BB:CC:19</td></tr>
+                        <tr><td>20</td><td>DEV020TEST20</td><td>866988020</td><td>AA:BB:CC:20</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- QR CODE SECTION -->
+        <div class="qr-section">
+            <div style="width: 20mm; height: 20mm; background-color: #f0f0f0; border: 1px dashed #999; display: flex; align-items: center; justify-content: center; font-size: 8px;">
+                QR CODE<br>GOES HERE
+            </div>
+            <div class="qr-label">🔍 QR: All Device Data</div>
+        </div>
+    </div>
+    
+    <!-- FOOTER -->
+    <div class="footer">
+        📋 S/N Range: DEV001TEST01 → DEV020TEST20
+    </div>
+</body>
+</html>

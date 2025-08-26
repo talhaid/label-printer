@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Minimal Box Label</title>
+    <style>
+        @page { size: 15cm 10cm; margin: 0; }
+        body { 
+            margin: 0; padding: 2mm; font-family: Arial, sans-serif; font-size: 5px; 
+            width: 15cm; height: 10cm; box-sizing: border-box; 
+        }
+        .content { display: flex; gap: 2mm; height: 100%; }
+        .devices { flex: 1; display: flex; gap: 1mm; }
+        .col { flex: 1; }
+        table { width: 100%; border-collapse: collapse; font-size: 5px; }
+        th { background: #ddd; padding: 0.5mm; border: 0.3px solid #999; font-size: 4px; }
+        td { padding: 0.3mm; border: 0.3px solid #ccc; }
+        tr:nth-child(even) { background: #f9f9f9; }
+        .qr { width: 22mm; text-align: center; display: flex; align-items: center; justify-content: center; }
+        .qr-placeholder { 
+            width: 20mm; height: 20mm; background: #f0f0f0; 
+            border: 1px dashed #999; display: flex; align-items: center; 
+            justify-content: center; font-size: 6px; 
+        }
+        @media print { body { print-color-adjust: exact; } }
+    </style>
+</head>
+<body>
+    <div class="content">
+        <div class="devices">
+            <div class="col">
+                <table>
+                    <tr><th>No</th><th>Serial</th><th>IMEI</th><th>MAC</th></tr>
+                    <tr><td>01</td><td>TEST0001</td><td>86698001</td><td>AA:BB:01</td></tr>
+                    <tr><td>02</td><td>TEST0002</td><td>86698002</td><td>AA:BB:02</td></tr>
+                    <tr><td>03</td><td>TEST0003</td><td>86698003</td><td>AA:BB:03</td></tr>
+                    <tr><td>04</td><td>TEST0004</td><td>86698004</td><td>AA:BB:04</td></tr>
+                    <tr><td>05</td><td>TEST0005</td><td>86698005</td><td>AA:BB:05</td></tr>
+                    <tr><td>06</td><td>TEST0006</td><td>86698006</td><td>AA:BB:06</td></tr>
+                    <tr><td>07</td><td>TEST0007</td><td>86698007</td><td>AA:BB:07</td></tr>
+                    <tr><td>08</td><td>TEST0008</td><td>86698008</td><td>AA:BB:08</td></tr>
+                    <tr><td>09</td><td>TEST0009</td><td>86698009</td><td>AA:BB:09</td></tr>
+                    <tr><td>10</td><td>TEST0010</td><td>86698010</td><td>AA:BB:10</td></tr>
+                </table>
+            </div>
+            <div class="col">
+                <table>
+                    <tr><th>No</th><th>Serial</th><th>IMEI</th><th>MAC</th></tr>
+                    <tr><td>11</td><td>TEST0011</td><td>86698011</td><td>AA:BB:11</td></tr>
+                    <tr><td>12</td><td>TEST0012</td><td>86698012</td><td>AA:BB:12</td></tr>
+                    <tr><td>13</td><td>TEST0013</td><td>86698013</td><td>AA:BB:13</td></tr>
+                    <tr><td>14</td><td>TEST0014</td><td>86698014</td><td>AA:BB:14</td></tr>
+                    <tr><td>15</td><td>TEST0015</td><td>86698015</td><td>AA:BB:15</td></tr>
+                    <tr><td>16</td><td>TEST0016</td><td>86698016</td><td>AA:BB:16</td></tr>
+                    <tr><td>17</td><td>TEST0017</td><td>86698017</td><td>AA:BB:17</td></tr>
+                    <tr><td>18</td><td>TEST0018</td><td>86698018</td><td>AA:BB:18</td></tr>
+                    <tr><td>19</td><td>TEST0019</td><td>86698019</td><td>AA:BB:19</td></tr>
+                    <tr><td>20</td><td>TEST0020</td><td>86698020</td><td>AA:BB:20</td></tr>
+                </table>
+            </div>
+        </div>
+        <div class="qr">
+            <div class="qr-placeholder">QR</div>
+        </div>
+    </div>
+</body>
+</html>
