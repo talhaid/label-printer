@@ -54,6 +54,16 @@ class AutoPrinterGUI:
         # GUI update queue
         self.gui_queue = queue.Queue()
         
+        # Latest received data storage
+        self.latest_device_data = {
+            'STC': '',
+            'SERIAL_NUMBER': '',
+            'IMEI': '',
+            'IMSI': '',
+            'CCID': '',
+            'MAC_ADDRESS': ''
+        }
+        
         # Default template
         self.current_template = """^XA
 ^PW399
@@ -365,7 +375,14 @@ class AutoPrinterGUI:
         
         ttk.Label(files_frame, text="CSV Log:").grid(row=1, column=0, sticky="w", padx=5, pady=2)
         ttk.Button(files_frame, text="Open CSV", command=self.open_csv_file).grid(row=1, column=1, sticky="w", padx=5, pady=2)
+
+        # Latest Received Data Table
+        latest_data_frame = ttk.LabelFrame(status_frame, text="Latest Received Data")
+        latest_data_frame.pack(fill="x", padx=5, pady=5)
         
+        # Create table with clean layout
+        self.setup_latest_data_table(latest_data_frame)
+
         # Live data preview
         preview_frame = ttk.LabelFrame(status_frame, text="Live Data Preview")
         preview_frame.pack(fill="both", expand=True, padx=5, pady=5)
@@ -383,6 +400,53 @@ class AutoPrinterGUI:
         
         ttk.Button(test_frame, text="Test Parse & Print", command=self.test_data_processing).pack(side="left", padx=5, pady=5)
     
+    def setup_latest_data_table(self, parent_frame):
+        """Setup the latest received data table with clean layout."""
+        # Create a frame for the table
+        table_frame = ttk.Frame(parent_frame)
+        table_frame.pack(fill="x", padx=5, pady=5)
+        
+        # Data labels and values
+        data_fields = [
+            ('STC:', 'stc_value'),
+            ('Serial Number:', 'sn_value'),
+            ('IMEI:', 'imei_value'),
+            ('IMSI:', 'imsi_value'),
+            ('CCID:', 'ccid_value'),
+            ('MAC Address:', 'mac_value')
+        ]
+        
+        # Create the table layout
+        self.latest_data_labels = {}
+        for i, (label_text, var_name) in enumerate(data_fields):
+            # Label
+            ttk.Label(table_frame, text=label_text, font=("Arial", 9, "bold")).grid(
+                row=i, column=0, sticky="w", padx=(5, 10), pady=2
+            )
+            # Value
+            value_label = ttk.Label(table_frame, text="---", font=("Consolas", 9))
+            value_label.grid(row=i, column=1, sticky="w", padx=5, pady=2)
+            self.latest_data_labels[var_name] = value_label
+        
+        # Configure column weights
+        table_frame.columnconfigure(1, weight=1)
+    
+    def update_latest_data_display(self, device_data, stc):
+        """Update the latest received data table."""
+        try:
+            self.latest_data_labels['stc_value'].config(text=str(stc))
+            self.latest_data_labels['sn_value'].config(text=device_data.get('SERIAL_NUMBER', '---'))
+            self.latest_data_labels['imei_value'].config(text=device_data.get('IMEI', '---'))
+            self.latest_data_labels['imsi_value'].config(text=device_data.get('IMSI', '---'))
+            self.latest_data_labels['ccid_value'].config(text=device_data.get('CCID', '---'))
+            self.latest_data_labels['mac_value'].config(text=device_data.get('MAC_ADDRESS', '---'))
+            
+            # Store the data
+            self.latest_device_data = device_data.copy()
+            self.latest_device_data['STC'] = str(stc)
+        except Exception as e:
+            print(f"Error updating latest data display: {e}")
+
     def setup_box_labels_tab(self, notebook):
         """Setup the box labels creation tab."""
         box_frame = ttk.Frame(notebook)
@@ -797,6 +861,8 @@ class AutoPrinterGUI:
                         # Add to data table with STC and printed status
                         device_data['STC'] = stc_assigned
                         self.gui_queue.put(('add_to_table', (device_data, 'Printed', timestamp)))
+                        # Update latest data display
+                        self.gui_queue.put(('device_processed', (device_data, stc_assigned)))
                         
                         # Add PCB entry if PCB printing is enabled
                         if self.pcb_enabled:
@@ -904,6 +970,8 @@ class AutoPrinterGUI:
                     if success:
                         pcb_status_text = " and PCB" if pcb_success else " (PCB failed)" if self.pcb_enabled else ""
                         self.log_message(f"Test device printed successfully{pcb_status_text}!", "INFO")
+                        # Update latest data display
+                        self.gui_queue.put(('device_processed', (device_data, stc_assigned)))
                         messagebox.showinfo("Success", f"Test device printed successfully{pcb_status_text}!")
                     else:
                         self.log_message("Test device print failed", "ERROR")
@@ -1446,6 +1514,11 @@ class AutoPrinterGUI:
                     # Update device queue display
                     self.update_device_queue_display()
                     self.update_queue_display()
+                
+                elif msg_type == 'device_processed':
+                    # Update latest received data display
+                    device_data, stc = data
+                    self.update_latest_data_display(device_data, stc)
                 
                 elif msg_type == 'add_to_table':
                     # Add device to data table

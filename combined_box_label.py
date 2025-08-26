@@ -41,8 +41,9 @@ class CombinedBoxLabel:
     def generate_combined_pdf(self, devices: List[Dict[str, str]], box_number: str = "BOX001") -> str:
         """Generate combined QR + device list PDF"""
         
-        width = 10 * cm
-        height = 15 * cm
+        # Label dimensions - 15cm x 20cm for two labels on A4
+        width = 15 * cm
+        height = 20 * cm
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         first_serial = devices[0]['SERIAL_NUMBER']
@@ -134,7 +135,7 @@ def main():
         print(f"✅ Combined box label: {filename}")
         print(f"📱 QR code contains all device data")
         print(f"📝 Visible device list for easy reading")
-        print(f"📏 Optimized for 10cm x 15cm")
+        print(f"📏 Optimized for 15cm x 20cm (two labels on A4)")
         print(f"🎯 Best of both worlds!")
     except Exception as e:
         print(f"❌ Error: {e}")
