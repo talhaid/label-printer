@@ -51,20 +51,8 @@ class CombinedBoxLabel:
         
         c = canvas.Canvas(filename, pagesize=(width, height))
         
-        # Header section - compact
-        y = height - 6*mm
-        
-        # Company name - smaller to save space
-        c.setFont("Helvetica-Bold", 10)
-        c.drawCentredString(width/2, y, "STC - SICAKLIK TAKIP CIHAZI")
-        y -= 6*mm
-        
-        # Date and box - compact
-        c.setFont("Helvetica", 8)
-        c.drawCentredString(width/2, y, f"{datetime.now().strftime('%d/%m/%Y')} - {box_number}")
-        y -= 8*mm
-        
-        # QR code - centered horizontally
+        # QR code first - moved to top, 1cm from edge
+        y = height - 10*mm  # 1cm from top
         qr_path = self.create_qr_with_devices(devices)
         qr_size = 40*mm  # Keep large size
         qr_x = (width - qr_size) / 2  # Center horizontally
@@ -78,28 +66,41 @@ class CombinedBoxLabel:
         except:
             pass
         
-        # Device list section - starts right after QR
-        y = qr_y - 3*mm
+        # Header section below QR
+        y = qr_y - 6*mm  # Space after QR
         
-        # Device list header - compact
-        c.setFont("Helvetica-Bold", 7)  # Increased from 6
+        # Company name
+        c.setFont("Helvetica-Bold", 10)
+        c.drawCentredString(width/2, y, "STC - SICAKLIK TAKIP CIHAZI")
+        y -= 6*mm
+        
+        # Date and box
+        c.setFont("Helvetica", 8)
+        c.drawCentredString(width/2, y, f"{datetime.now().strftime('%d/%m/%Y')} - {box_number}")
+        y -= 6*mm
+        
+        # Device list section - starts after header
+        y -= 3*mm
+        
+        # Device list header - compact to save space
+        c.setFont("Helvetica-Bold", 7)  # Reduced from 8
         c.drawCentredString(width/2, y, "DEVICE LIST")
-        y -= 5*mm  # Increased spacing
+        y -= 5*mm  # Reduced spacing
         
-        # Column headers - larger font for better readability
-        c.setFont("Helvetica-Bold", 6)  # Increased from 5.5
+        # Column headers - compact
+        c.setFont("Helvetica-Bold", 6)  # Reduced from 7
         c.drawString(3*mm, y, "No.")
         c.drawString(10*mm, y, "Serial Number")
         c.drawString(42*mm, y, "IMEI")
         c.drawString(70*mm, y, "MAC")
-        y -= 4*mm  # Increased spacing
+        y -= 4*mm  # Reduced spacing
         
-        # Device entries - much larger font
-        c.setFont("Courier", 5.5)  # Increased from 4.5 to 5.5
-        line_height = 3*mm  # Increased from 2.5mm to 3mm
+        # Device entries - smaller font and tighter spacing for more devices
+        c.setFont("Courier", 5.5)  # Reduced from 6.5 to 5.5
+        line_height = 3*mm  # Reduced from 3.5mm to 3mm
         
         for i, device in enumerate(devices, 1):
-            if y > 6*mm:  # Adjusted space check for larger fonts
+            if y > 5*mm:  # Reduced margin for more space
                 c.drawString(3*mm, y, f"{i:02d}")
                 c.drawString(10*mm, y, device['SERIAL_NUMBER'])
                 c.drawString(42*mm, y, device['IMEI'])
@@ -107,7 +108,7 @@ class CombinedBoxLabel:
                 y -= line_height
             else:
                 # If we run out of space
-                c.setFont("Helvetica", 5)  # Larger fallback font
+                c.setFont("Helvetica", 5)  # Smaller fallback font
                 c.drawCentredString(width/2, y, "... (complete data in QR code)")
                 break
         
