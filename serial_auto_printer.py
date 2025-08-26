@@ -332,8 +332,8 @@ class DeviceAutoPrinter:
         self.serial_monitor = SerialPortMonitor(serial_port, baudrate) if serial_port else None
         
         # Initialize file paths first
-        self.zpl_output_dir = "zpl_outputs"
-        self.csv_file_path = "device_log.csv"
+        self.zpl_output_dir = os.path.join("save", "zpl_output")
+        self.csv_file_path = os.path.join("save", "csv", "device_log.csv")
         
         # STC counter management (depends on csv_file_path)
         self.current_stc = self._get_next_stc_from_csv(initial_stc)
@@ -506,18 +506,22 @@ class DeviceAutoPrinter:
             file_exists = os.path.exists(self.csv_file_path)
             
             if not file_exists:
-                # Create CSV file with headers
+                # Ensure save directory exists
+                save_dir = os.path.dirname(self.csv_file_path)
+                if not os.path.exists(save_dir):
+                    os.makedirs(save_dir)
+                    logger.info(f"Created save directory: {save_dir}")
+                
+                # Create CSV file with headers (matching GUI format)
                 headers = [
-                    'timestamp',
-                    'serial_number', 
-                    'imei',
-                    'imsi',
-                    'ccid',
-                    'mac_address',
-                    'stc',
-                    'print_status',
-                    'zpl_file',
-                    'raw_data'
+                    'STC',
+                    'SERIAL_NUMBER', 
+                    'IMEI',
+                    'IMSI',
+                    'CCID',
+                    'MAC_ADDRESS',
+                    'STATUS',
+                    'TIMESTAMP'
                 ]
                 
                 with open(self.csv_file_path, 'w', newline='', encoding='utf-8') as csvfile:
@@ -570,17 +574,16 @@ class DeviceAutoPrinter:
             raw_data (str): Original raw data from serial port
         """
         try:
+            # New CSV format to match GUI expectations
             row_data = [
-                device_data.get('TIMESTAMP', ''),
+                device_data.get('STC', ''),
                 device_data.get('SERIAL_NUMBER', ''),
                 device_data.get('IMEI', ''),
                 device_data.get('IMSI', ''),
                 device_data.get('CCID', ''),
                 device_data.get('MAC_ADDRESS', ''),
-                device_data.get('STC', ''),
-                print_status,
-                zpl_filename,
-                raw_data.strip()
+                'Printed' if print_status.startswith('SUCCESS') else 'Error',
+                device_data.get('TIMESTAMP', '')
             ]
             
             with open(self.csv_file_path, 'a', newline='', encoding='utf-8') as csvfile:
@@ -600,16 +603,8 @@ class DeviceAutoPrinter:
         device_data = self.parser.parse_data(raw_data)
         if not device_data:
             self.stats['parse_errors'] += 1
-            # Log parse error to CSV
-            self._log_to_csv({
-                'TIMESTAMP': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                'SERIAL_NUMBER': 'PARSE_ERROR',
-                'IMEI': '',
-                'IMSI': '',
-                'CCID': '',
-                'MAC_ADDRESS': '',
-                'STC': ''
-            }, 'PARSE_ERROR', '', raw_data)
+            # Don't log parse errors to CSV - only log valid device data
+            logger.warning(f"No valid data pattern found in: {raw_data}")
             return None
         
         self.stats['devices_processed'] += 1

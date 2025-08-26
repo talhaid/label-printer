@@ -111,6 +111,9 @@ class AutoPrinterGUI:
         # Box Labels Tab
         self.setup_box_labels_tab(notebook)
         
+        # CSV Management Tab
+        self.setup_csv_tab(notebook)
+        
         # Template Tab
         self.setup_template_tab(notebook)
         
@@ -471,6 +474,122 @@ class AutoPrinterGUI:
         
         info_label = ttk.Label(box_frame, text=info_text, justify=tk.LEFT, wraplength=800)
         info_label.pack(padx=10, pady=5, anchor=tk.W)
+    
+    def setup_csv_tab(self, notebook):
+        """Setup the CSV management tab."""
+        csv_frame = ttk.Frame(notebook)
+        notebook.add(csv_frame, text="CSV Manager")
+        
+        # CSV file info and controls
+        csv_control_frame = ttk.Frame(csv_frame)
+        csv_control_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        # Current CSV file display
+        ttk.Label(csv_control_frame, text="Current CSV File:").pack(side=tk.LEFT)
+        self.csv_file_label = ttk.Label(csv_control_frame, text="save/csv/device_log.csv", 
+                                       font=("Arial", 10, "bold"), foreground="green")
+        self.csv_file_label.pack(side=tk.LEFT, padx=(10, 20))
+        
+        # CSV control buttons
+        ttk.Button(csv_control_frame, text="📂 Open CSV Folder", command=self.open_csv_folder).pack(side=tk.LEFT, padx=5)
+        ttk.Button(csv_control_frame, text="📄 Open CSV File", command=self.open_csv_file_external).pack(side=tk.LEFT, padx=5)
+        ttk.Button(csv_control_frame, text="🔄 Refresh View", command=self.refresh_csv_view).pack(side=tk.LEFT, padx=5)
+        ttk.Button(csv_control_frame, text="🧹 Clean CSV", command=self.clean_csv_data).pack(side=tk.LEFT, padx=5)
+        
+        # CSV statistics
+        csv_stats_frame = ttk.LabelFrame(csv_frame, text="CSV Statistics")
+        csv_stats_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        stats_grid = ttk.Frame(csv_stats_frame)
+        stats_grid.pack(fill=tk.X, padx=5, pady=5)
+        
+        ttk.Label(stats_grid, text="Total Records:").grid(row=0, column=0, sticky="w", padx=5)
+        self.csv_total_label = ttk.Label(stats_grid, text="0", font=("Arial", 10, "bold"))
+        self.csv_total_label.grid(row=0, column=1, sticky="w", padx=5)
+        
+        ttk.Label(stats_grid, text="Valid Devices:").grid(row=0, column=2, sticky="w", padx=20)
+        self.csv_valid_label = ttk.Label(stats_grid, text="0", font=("Arial", 10, "bold"), foreground="green")
+        self.csv_valid_label.grid(row=0, column=3, sticky="w", padx=5)
+        
+        ttk.Label(stats_grid, text="Parse Errors:").grid(row=0, column=4, sticky="w", padx=20)
+        self.csv_errors_label = ttk.Label(stats_grid, text="0", font=("Arial", 10, "bold"), foreground="red")
+        self.csv_errors_label.grid(row=0, column=5, sticky="w", padx=5)
+        
+        ttk.Label(stats_grid, text="Latest STC:").grid(row=1, column=0, sticky="w", padx=5)
+        self.csv_latest_stc_label = ttk.Label(stats_grid, text="6000", font=("Arial", 10, "bold"))
+        self.csv_latest_stc_label.grid(row=1, column=1, sticky="w", padx=5)
+        
+        ttk.Label(stats_grid, text="File Size:").grid(row=1, column=2, sticky="w", padx=20)
+        self.csv_size_label = ttk.Label(stats_grid, text="0 KB", font=("Arial", 10, "bold"))
+        self.csv_size_label.grid(row=1, column=3, sticky="w", padx=5)
+        
+        ttk.Label(stats_grid, text="Last Modified:").grid(row=1, column=4, sticky="w", padx=20)
+        self.csv_modified_label = ttk.Label(stats_grid, text="Never", font=("Arial", 10, "bold"))
+        self.csv_modified_label.grid(row=1, column=5, sticky="w", padx=5)
+        
+        # CSV data view with pagination
+        csv_view_frame = ttk.LabelFrame(csv_frame, text="CSV Data Viewer")
+        csv_view_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        
+        # Pagination controls
+        csv_nav_frame = ttk.Frame(csv_view_frame)
+        csv_nav_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        ttk.Label(csv_nav_frame, text="Show:").pack(side=tk.LEFT)
+        self.csv_show_var = tk.StringVar(value="Latest 50")
+        csv_show_combo = ttk.Combobox(csv_nav_frame, textvariable=self.csv_show_var, 
+                                     values=["Latest 50", "Latest 100", "All Records", "Errors Only", "Valid Only"], 
+                                     width=15, state="readonly")
+        csv_show_combo.pack(side=tk.LEFT, padx=(5, 20))
+        csv_show_combo.bind("<<ComboboxSelected>>", lambda e: self.refresh_csv_view())
+        
+        # Search box
+        ttk.Label(csv_nav_frame, text="Search:").pack(side=tk.LEFT)
+        self.csv_search_var = tk.StringVar()
+        csv_search_entry = ttk.Entry(csv_nav_frame, textvariable=self.csv_search_var, width=20)
+        csv_search_entry.pack(side=tk.LEFT, padx=(5, 10))
+        csv_search_entry.bind("<KeyRelease>", lambda e: self.refresh_csv_view())
+        
+        ttk.Button(csv_nav_frame, text="Export Filtered", command=self.export_filtered_csv).pack(side=tk.RIGHT, padx=5)
+        
+        # CSV data table
+        csv_table_frame = ttk.Frame(csv_view_frame)
+        csv_table_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # Create treeview for CSV data
+        csv_columns = ("STC", "Serial", "IMEI", "IMSI", "CCID", "MAC", "Status", "Time")
+        self.csv_tree = ttk.Treeview(csv_table_frame, columns=csv_columns, show="headings", height=15)
+        
+        # Configure columns
+        self.csv_tree.heading("STC", text="STC")
+        self.csv_tree.heading("Serial", text="Serial Number")
+        self.csv_tree.heading("IMEI", text="IMEI")
+        self.csv_tree.heading("IMSI", text="IMSI")
+        self.csv_tree.heading("CCID", text="CCID")
+        self.csv_tree.heading("MAC", text="MAC Address")
+        self.csv_tree.heading("Status", text="Status")
+        self.csv_tree.heading("Time", text="Timestamp")
+        
+        # Column widths
+        self.csv_tree.column("STC", width=80)
+        self.csv_tree.column("Serial", width=150)
+        self.csv_tree.column("IMEI", width=150)
+        self.csv_tree.column("IMSI", width=150)
+        self.csv_tree.column("CCID", width=150)
+        self.csv_tree.column("MAC", width=130)
+        self.csv_tree.column("Status", width=100)
+        self.csv_tree.column("Time", width=150)
+        
+        # Scrollbar for CSV table
+        csv_scrollbar = ttk.Scrollbar(csv_table_frame, orient=tk.VERTICAL, command=self.csv_tree.yview)
+        self.csv_tree.configure(yscrollcommand=csv_scrollbar.set)
+        
+        self.csv_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        csv_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # CSV data is loaded initially
+        self.csv_data = None
+        self.refresh_csv_view()
     
     def setup_template_tab(self, notebook):
         """Setup the template editing tab."""
@@ -924,7 +1043,7 @@ class AutoPrinterGUI:
         """Open the ZPL outputs folder."""
         try:
             import subprocess
-            zpl_folder = os.path.abspath("zpl_outputs")
+            zpl_folder = os.path.abspath(os.path.join("save", "zpl_output"))
             if os.path.exists(zpl_folder):
                 subprocess.Popen(f'explorer "{zpl_folder}"')
             else:
@@ -936,7 +1055,7 @@ class AutoPrinterGUI:
         """Open the CSV log file."""
         try:
             import subprocess
-            csv_file = os.path.abspath("device_log.csv")
+            csv_file = os.path.abspath(os.path.join("save", "csv", "device_log.csv"))
             if os.path.exists(csv_file):
                 subprocess.Popen(f'start excel "{csv_file}"', shell=True)
             else:
@@ -1465,7 +1584,7 @@ class AutoPrinterGUI:
             for item in self.csv_tree.get_children():
                 self.csv_tree.delete(item)
             
-            csv_file = "device_log.csv"
+            csv_file = os.path.join("save", "csv", "device_log.csv")
             if not os.path.exists(csv_file):
                 self.csv_status_label.config(text="CSV file not found")
                 self.csv_info_label.config(text="No data")
@@ -1516,7 +1635,7 @@ class AutoPrinterGUI:
             for item in self.csv_tree.get_children():
                 self.csv_tree.delete(item)
             
-            csv_file = "device_log.csv"
+            csv_file = os.path.join("save", "csv", "device_log.csv")
             if not os.path.exists(csv_file):
                 return
             
@@ -1990,6 +2109,213 @@ For support and updates, check the project documentation."""
             error_msg = f"Failed to create box label: {str(e)}"
             self.log_message(error_msg, "ERROR")
             messagebox.showerror("Error", error_msg)
+    
+    # CSV Management Methods
+    def get_csv_path(self):
+        """Get the path to the CSV file."""
+        return os.path.join("save", "csv", "device_log.csv")
+    
+    def open_csv_folder(self):
+        """Open the CSV folder in file explorer."""
+        csv_folder = os.path.join("save", "csv")
+        if os.path.exists(csv_folder):
+            os.startfile(csv_folder)
+        else:
+            messagebox.showerror("Error", f"CSV folder not found: {csv_folder}")
+    
+    def open_csv_file_external(self):
+        """Open the CSV file in external application."""
+        csv_path = self.get_csv_path()
+        if os.path.exists(csv_path):
+            os.startfile(csv_path)
+        else:
+            messagebox.showerror("Error", f"CSV file not found: {csv_path}")
+    
+    def refresh_csv_view(self):
+        """Refresh the CSV data view."""
+        csv_path = self.get_csv_path()
+        
+        try:
+            # Read CSV data
+            if os.path.exists(csv_path):
+                import pandas as pd
+                self.csv_data = pd.read_csv(csv_path)
+                
+                # Update statistics
+                total_records = len(self.csv_data)
+                valid_records = len(self.csv_data[self.csv_data['STATUS'] != 'PARSE_ERROR']) if 'STATUS' in self.csv_data.columns else total_records
+                error_records = total_records - valid_records
+                latest_stc = self.csv_data['STC'].max() if 'STC' in self.csv_data.columns and len(self.csv_data) > 0 else 0
+                
+                # File statistics
+                file_size = os.path.getsize(csv_path) / 1024  # KB
+                modified_time = datetime.fromtimestamp(os.path.getmtime(csv_path)).strftime('%Y-%m-%d %H:%M:%S')
+                
+                # Update labels
+                self.csv_total_label.config(text=str(total_records))
+                self.csv_valid_label.config(text=str(valid_records))
+                self.csv_errors_label.config(text=str(error_records))
+                self.csv_latest_stc_label.config(text=str(latest_stc))
+                self.csv_size_label.config(text=f"{file_size:.1f} KB")
+                self.csv_modified_label.config(text=modified_time)
+                
+                # Filter data based on selection
+                display_data = self.csv_data.copy()
+                show_option = self.csv_show_var.get()
+                
+                if show_option == "Latest 50":
+                    display_data = display_data.tail(50)
+                elif show_option == "Latest 100":
+                    display_data = display_data.tail(100)
+                elif show_option == "Errors Only":
+                    if 'STATUS' in display_data.columns:
+                        display_data = display_data[display_data['STATUS'] == 'PARSE_ERROR']
+                elif show_option == "Valid Only":
+                    if 'STATUS' in display_data.columns:
+                        display_data = display_data[display_data['STATUS'] != 'PARSE_ERROR']
+                
+                # Apply search filter
+                search_term = self.csv_search_var.get().strip().lower()
+                if search_term:
+                    mask = display_data.astype(str).apply(lambda x: x.str.lower().str.contains(search_term, na=False)).any(axis=1)
+                    display_data = display_data[mask]
+                
+                # Clear and populate tree
+                for item in self.csv_tree.get_children():
+                    self.csv_tree.delete(item)
+                
+                for _, row in display_data.iterrows():
+                    values = []
+                    for col in ["STC", "SERIAL_NUMBER", "IMEI", "IMSI", "CCID", "MAC_ADDRESS", "STATUS", "TIMESTAMP"]:
+                        if col in row:
+                            values.append(str(row[col]))
+                        else:
+                            values.append("N/A")
+                    
+                    # Color code rows
+                    tag = "normal"
+                    if values[6] == "PARSE_ERROR":  # Status column
+                        tag = "error"
+                    
+                    self.csv_tree.insert("", "end", values=values, tags=(tag,))
+                
+                # Configure row colors
+                self.csv_tree.tag_configure("error", background="#ffcccc")
+                self.csv_tree.tag_configure("normal", background="#ffffff")
+                
+            else:
+                # No CSV file exists
+                self.csv_total_label.config(text="0")
+                self.csv_valid_label.config(text="0")
+                self.csv_errors_label.config(text="0")
+                self.csv_latest_stc_label.config(text="0")
+                self.csv_size_label.config(text="0 KB")
+                self.csv_modified_label.config(text="Never")
+                
+                # Clear tree
+                for item in self.csv_tree.get_children():
+                    self.csv_tree.delete(item)
+                
+        except Exception as e:
+            self.log_message(f"Error refreshing CSV view: {e}", "ERROR")
+    
+    def clean_csv_data(self):
+        """Clean CSV data by removing parse errors and duplicates."""
+        csv_path = self.get_csv_path()
+        
+        if not os.path.exists(csv_path):
+            messagebox.showerror("Error", "CSV file not found")
+            return
+        
+        try:
+            import pandas as pd
+            
+            # Read current data
+            df = pd.read_csv(csv_path)
+            original_count = len(df)
+            
+            # Remove parse errors
+            if 'STATUS' in df.columns:
+                df_clean = df[df['STATUS'] != 'PARSE_ERROR'].copy()
+            else:
+                df_clean = df.copy()
+            
+            # Remove duplicates based on serial number
+            if 'SERIAL_NUMBER' in df_clean.columns:
+                df_clean = df_clean.drop_duplicates(subset=['SERIAL_NUMBER'], keep='last')
+            
+            cleaned_count = len(df_clean)
+            removed_count = original_count - cleaned_count
+            
+            # Create backup
+            backup_path = csv_path.replace('.csv', f'_backup_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv')
+            df.to_csv(backup_path, index=False)
+            
+            # Save cleaned data
+            df_clean.to_csv(csv_path, index=False)
+            
+            # Refresh view
+            self.refresh_csv_view()
+            
+            messagebox.showinfo("CSV Cleaned", 
+                              f"CSV cleaning completed!\n\n"
+                              f"Original records: {original_count}\n"
+                              f"Cleaned records: {cleaned_count}\n"
+                              f"Removed records: {removed_count}\n\n"
+                              f"Backup saved as: {os.path.basename(backup_path)}")
+            
+            self.log_message(f"CSV cleaned: {removed_count} records removed, backup saved", "INFO")
+            
+        except Exception as e:
+            self.log_message(f"Error cleaning CSV: {e}", "ERROR")
+            messagebox.showerror("Error", f"Failed to clean CSV: {e}")
+    
+    def export_filtered_csv(self):
+        """Export the currently filtered view to a new CSV file."""
+        if not hasattr(self, 'csv_data') or self.csv_data is None:
+            messagebox.showerror("Error", "No CSV data loaded")
+            return
+        
+        try:
+            from tkinter import filedialog
+            
+            # Get filtered data based on current view
+            display_data = self.csv_data.copy()
+            show_option = self.csv_show_var.get()
+            
+            if show_option == "Latest 50":
+                display_data = display_data.tail(50)
+            elif show_option == "Latest 100":
+                display_data = display_data.tail(100)
+            elif show_option == "Errors Only":
+                if 'STATUS' in display_data.columns:
+                    display_data = display_data[display_data['STATUS'] == 'PARSE_ERROR']
+            elif show_option == "Valid Only":
+                if 'STATUS' in display_data.columns:
+                    display_data = display_data[display_data['STATUS'] != 'PARSE_ERROR']
+            
+            # Apply search filter
+            search_term = self.csv_search_var.get().strip().lower()
+            if search_term:
+                mask = display_data.astype(str).apply(lambda x: x.str.lower().str.contains(search_term, na=False)).any(axis=1)
+                display_data = display_data[mask]
+            
+            # Ask for save location
+            filename = filedialog.asksaveasfilename(
+                defaultextension=".csv",
+                filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
+                initialdir=os.path.join("save", "csv"),
+                initialname=f"filtered_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            )
+            
+            if filename:
+                display_data.to_csv(filename, index=False)
+                messagebox.showinfo("Export Complete", f"Filtered data exported to:\n{filename}\n\nRecords: {len(display_data)}")
+                self.log_message(f"Exported {len(display_data)} filtered records to {filename}", "INFO")
+        
+        except Exception as e:
+            self.log_message(f"Error exporting CSV: {e}", "ERROR")
+            messagebox.showerror("Error", f"Failed to export CSV: {e}")
 
     def on_closing(self):
         """Handle application closing."""
