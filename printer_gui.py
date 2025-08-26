@@ -392,6 +392,10 @@ class AutoPrinterGUI:
         
         ttk.Button(box_control_frame, text="Create PDF Label", command=self.create_box_pdf_label).pack(side=tk.RIGHT)
         
+        # Selection controls
+        ttk.Button(box_control_frame, text="Clear All", command=self.clear_all_box_devices).pack(side=tk.RIGHT, padx=(0, 5))
+        ttk.Button(box_control_frame, text="Select All", command=self.select_all_box_devices).pack(side=tk.RIGHT, padx=(0, 5))
+        
         # Selection info
         self.box_selection_label = ttk.Label(box_control_frame, text="Selected: 0/20")
         self.box_selection_label.pack(side=tk.RIGHT, padx=(0, 20))
@@ -1778,6 +1782,30 @@ For support and updates, check the project documentation."""
             if self.box_current_page < total_pages - 1:
                 self.box_current_page += 1
                 self.update_box_device_display()
+                
+    def select_all_box_devices(self):
+        """Select all devices on current page (up to 20 total)."""
+        if self.box_devices_df is None:
+            return
+            
+        # Calculate current page devices
+        start_idx = self.box_current_page * self.box_devices_per_page
+        end_idx = min(start_idx + self.box_devices_per_page, len(self.box_devices_df))
+        
+        # Add current page devices to selection (up to 20 total)
+        for idx in range(start_idx, end_idx):
+            if len(self.box_selected_devices) >= 20:
+                messagebox.showinfo("Selection Limit", "Maximum 20 devices selected")
+                break
+            if idx not in self.box_selected_devices:
+                self.box_selected_devices.append(idx)
+        
+        self.update_box_device_display()
+        
+    def clear_all_box_devices(self):
+        """Clear all selected devices."""
+        self.box_selected_devices = []
+        self.update_box_device_display()
                 
     def create_box_qr_with_devices(self, devices):
         """Create QR code with all device data for box label."""
