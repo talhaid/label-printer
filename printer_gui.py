@@ -498,12 +498,12 @@ class AutoPrinterGUI:
         list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
         
         # Create device list with checkboxes
-        columns = ("select", "no", "serial", "imei", "mac", "status")
-        self.box_tree = ttk.Treeview(list_frame, columns=columns, show="headings", height=20)
+        columns = ("select", "no", "serial", "imei", "mac", "status", "global_idx")
+        self.box_tree = ttk.Treeview(list_frame, columns=columns, show="headings", height=20, displaycolumns=("select", "no", "serial", "imei", "mac", "status"))
         
         # Configure columns
         self.box_tree.heading("select", text="☑")
-        self.box_tree.heading("no", text="No.")
+        self.box_tree.heading("no", text="STC")  # Changed from "No." to "STC"
         self.box_tree.heading("serial", text="Serial Number")
         self.box_tree.heading("imei", text="IMEI")
         self.box_tree.heading("mac", text="MAC Address")
@@ -559,6 +559,7 @@ class AutoPrinterGUI:
         ttk.Button(csv_control_frame, text="📄 Open CSV File", command=self.open_csv_file_external).pack(side=tk.LEFT, padx=5)
         ttk.Button(csv_control_frame, text="🔄 Refresh View", command=self.refresh_csv_view).pack(side=tk.LEFT, padx=5)
         ttk.Button(csv_control_frame, text="🧹 Clean CSV", command=self.clean_csv_data).pack(side=tk.LEFT, padx=5)
+        ttk.Button(csv_control_frame, text="🗑️ Clear All CSV", command=self.clear_all_csv_data).pack(side=tk.LEFT, padx=5)
         
         # CSV statistics
         csv_stats_frame = ttk.LabelFrame(csv_frame, text="CSV Statistics")
@@ -1943,18 +1944,23 @@ For support and updates, check the project documentation."""
         end_idx = min(start_idx + self.box_devices_per_page, total_devices)
         page_devices = self.box_devices_df.iloc[start_idx:end_idx]
         
-        # Add devices to tree
+        # Add devices to tree with row indices
         for idx, (_, device) in enumerate(page_devices.iterrows()):
             global_idx = start_idx + idx
             is_selected = global_idx in self.box_selected_devices
             
+            # Get STC from device data
+            stc = device.get('STC', 'N/A')
+            
+            # Include global_idx in the values
             self.box_tree.insert("", tk.END, values=(
                 "☑" if is_selected else "☐",
-                f"{global_idx + 1:02d}",
+                str(stc),  # Show STC instead of sequential number
                 device['SERIAL_NUMBER'],
                 device['IMEI'],
                 device['MAC_ADDRESS'],
-                device.get('STATUS', 'Available')
+                device.get('STATUS', 'Available'),
+                global_idx  # Hidden column for global index
             ), tags=('selected' if is_selected else 'unselected',))
             
         # Configure tags
@@ -1971,16 +1977,16 @@ For support and updates, check the project documentation."""
         if not item:
             return
             
-        # Get the global index
+        # Get the global index from the hidden column
         values = self.box_tree.item(item, 'values')
-        device_no = int(values[1]) - 1  # Convert to 0-based index
+        global_idx = int(values[6])  # The global_idx is in the 7th column (index 6)
         
         # Toggle selection
-        if device_no in self.box_selected_devices:
-            self.box_selected_devices.remove(device_no)
+        if global_idx in self.box_selected_devices:
+            self.box_selected_devices.remove(global_idx)
         else:
             if len(self.box_selected_devices) < 20:
-                self.box_selected_devices.append(device_no)
+                self.box_selected_devices.append(global_idx)
             else:
                 messagebox.showwarning("Selection Limit", "Maximum 20 devices can be selected for one box")
                 return
@@ -2028,12 +2034,13 @@ For support and updates, check the project documentation."""
     def create_box_qr_with_devices(self, devices):
         """Create QR code with all device data for box label."""
         qr_data = []
-        for i, device in enumerate(devices, 1):
+        for device in devices:
             # Ensure all values are strings to avoid numpy type issues
+            stc = str(device.get('STC', 'N/A'))  # Get STC from device data
             serial = str(device['SERIAL_NUMBER'])
             imei = str(device['IMEI'])
             mac = str(device['MAC_ADDRESS'])
-            qr_data.append(f"{i:02d}:{serial}:{imei}:{mac}")
+            qr_data.append(f"{stc}:{serial}:{imei}:{mac}")  # Use STC instead of sequential number
         
         qr_string = "|".join(qr_data)
         
@@ -2101,8 +2108,8 @@ For support and updates, check the project documentation."""
         
         # Column headers
         c.setFont("Helvetica-Bold", 6)
-        c.drawString(3*mm, y, "No.")
-        c.drawString(10*mm, y, "Serial Number")
+        c.drawString(3*mm, y, "STC")  # Changed from "No." to "STC"
+        c.drawString(12*mm, y, "Serial Number")  # Shifted right to make room for STC
         c.drawString(42*mm, y, "IMEI")
         c.drawString(70*mm, y, "MAC")
         y -= 4*mm
@@ -2111,10 +2118,11 @@ For support and updates, check the project documentation."""
         c.setFont("Courier", 5.5)
         line_height = 3*mm
         
-        for i, device in enumerate(devices, 1):
+        for device in devices:  # Removed enumerate since we're using STC
             if y > 5*mm:
-                c.drawString(3*mm, y, f"{i:02d}")
-                c.drawString(10*mm, y, str(device['SERIAL_NUMBER']))
+                stc = str(device.get('STC', 'N/A'))  # Get actual STC number
+                c.drawString(3*mm, y, stc)  # Print STC instead of sequential number
+                c.drawString(12*mm, y, str(device['SERIAL_NUMBER']))  # Shifted right
                 c.drawString(42*mm, y, str(device['IMEI']))
                 c.drawString(70*mm, y, str(device['MAC_ADDRESS']))
                 y -= line_height
@@ -2150,6 +2158,7 @@ For support and updates, check the project documentation."""
             for idx in sorted(self.box_selected_devices):
                 device_row = self.box_devices_df.iloc[idx]
                 device_dict = {
+                    'STC': str(device_row.get('STC', 'N/A')),  # Include STC number
                     'SERIAL_NUMBER': str(device_row['SERIAL_NUMBER']),
                     'IMEI': str(device_row['IMEI']),
                     'MAC_ADDRESS': str(device_row['MAC_ADDRESS'])
@@ -2292,6 +2301,77 @@ For support and updates, check the project documentation."""
         except Exception as e:
             self.log_message(f"Error refreshing CSV view: {e}", "ERROR")
     
+    def clear_all_csv_data(self):
+        """Clear all CSV data with double confirmation."""
+        # First confirmation
+        result1 = messagebox.askyesno(
+            "⚠️ Warning - Clear All CSV Data", 
+            "This will DELETE ALL device data from the CSV file!\n\n"
+            "This action cannot be undone.\n\n"
+            "Are you sure you want to continue?",
+            icon='warning'
+        )
+        
+        if not result1:
+            return
+        
+        # Second confirmation
+        result2 = messagebox.askyesno(
+            "🚨 FINAL WARNING", 
+            "THIS WILL PERMANENTLY DELETE:\n"
+            "• All device records\n"
+            "• All STC assignments\n"
+            "• All printing history\n\n"
+            "A backup will be created before clearing.\n\n"
+            "Are you ABSOLUTELY SURE?",
+            icon='warning'
+        )
+        
+        if not result2:
+            return
+        
+        csv_path = self.get_csv_path()
+        
+        if not os.path.exists(csv_path):
+            messagebox.showinfo("Info", "CSV file does not exist - nothing to clear")
+            return
+        
+        try:
+            # Create backup before clearing
+            backup_path = csv_path.replace('.csv', f'_backup_before_clear_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv')
+            import shutil
+            shutil.copy2(csv_path, backup_path)
+            
+            # Clear CSV file - keep only headers
+            headers = "STC,SERIAL_NUMBER,IMEI,IMSI,CCID,MAC_ADDRESS,STATUS,TIMESTAMP\n"
+            with open(csv_path, 'w', encoding='utf-8') as f:
+                f.write(headers)
+            
+            # Reset STC counter in auto_printer if available
+            if hasattr(self, 'auto_printer') and self.auto_printer:
+                self.auto_printer.current_stc = 60000  # Reset to starting STC
+                self.log_message("STC counter reset to 60000", "INFO")
+            
+            # Refresh displays
+            self.refresh_csv_view()
+            self.refresh_csv_data()
+            if hasattr(self, 'refresh_stc_from_csv'):
+                self.refresh_stc_from_csv()
+            
+            self.log_message(f"✅ CSV data cleared successfully. Backup saved: {backup_path}", "INFO")
+            
+            messagebox.showinfo(
+                "Success", 
+                f"CSV data cleared successfully!\n\n"
+                f"Backup saved as:\n{backup_path}\n\n"
+                f"STC counter reset to 60000"
+            )
+            
+        except Exception as e:
+            error_msg = f"Failed to clear CSV data: {str(e)}"
+            self.log_message(error_msg, "ERROR")
+            messagebox.showerror("Error", error_msg)
+
     def clean_csv_data(self):
         """Clean CSV data by removing parse errors and duplicates."""
         csv_path = self.get_csv_path()

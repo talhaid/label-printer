@@ -19,8 +19,8 @@ class CombinedBoxLabel:
         """Create QR code with all device data"""
         # Include all device info in QR
         qr_data = []
-        for i, device in enumerate(devices, 1):
-            qr_data.append(f"{i:02d}:{device['SERIAL_NUMBER']}:{device['IMEI']}:{device['MAC_ADDRESS']}")
+        for device in devices:
+            qr_data.append(f"{device['STC']}:{device['SERIAL_NUMBER']}:{device['IMEI']}:{device['MAC_ADDRESS']}")
         
         qr_string = "|".join(qr_data)
         
@@ -90,8 +90,8 @@ class CombinedBoxLabel:
         
         # Column headers - compact
         c.setFont("Helvetica-Bold", 6)  # Reduced from 7
-        c.drawString(3*mm, y, "No.")
-        c.drawString(10*mm, y, "Serial Number")
+        c.drawString(3*mm, y, "STC")
+        c.drawString(12*mm, y, "Serial Number")
         c.drawString(42*mm, y, "IMEI")
         c.drawString(70*mm, y, "MAC")
         y -= 4*mm  # Reduced spacing
@@ -102,8 +102,8 @@ class CombinedBoxLabel:
         
         for i, device in enumerate(devices, 1):
             if y > 5*mm:  # Reduced margin for more space
-                c.drawString(3*mm, y, f"{i:02d}")
-                c.drawString(10*mm, y, device['SERIAL_NUMBER'])
+                c.drawString(3*mm, y, device['STC'])
+                c.drawString(12*mm, y, device['SERIAL_NUMBER'])
                 c.drawString(42*mm, y, device['IMEI'])
                 c.drawString(70*mm, y, device['MAC_ADDRESS'])
                 y -= line_height
@@ -124,6 +124,7 @@ def main():
     devices = []
     for i in range(1, 21):
         device = {
+            'STC': str(60000 + i - 1),  # STC starting from 60000
             'SERIAL_NUMBER': f"ATS5429124237{i:02d}",
             'IMEI': f"869975033{i:06d}{i%10}",
             'MAC_ADDRESS': f"E4:5F:01:8D:{i:02X}:{(i*7)%256:02X}"

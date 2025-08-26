@@ -23,10 +23,18 @@ logger = logging.getLogger(__name__)
 class XPrinterPCB:
     """XPrinter XP-470B PCB label printer class."""
     
-    def __init__(self):
-        """Initialize the XPrinter PCB printer."""
+    def __init__(self, stc_x=65, stc_y=20, serial_x=65, serial_y=50, date_x=65, date_y=80):
+        """Initialize the XPrinter PCB printer with configurable positions."""
         self.printer_name = None
         self.find_xprinter()
+        
+        # Configurable text positions
+        self.stc_x = stc_x
+        self.stc_y = stc_y
+        self.serial_x = serial_x
+        self.serial_y = serial_y
+        self.date_x = date_x
+        self.date_y = date_y
         
         # TSPL commands (TSC Printer Language) - XPrinter XP-470B uses TSPL, not ESC/POS
         # No need for ESC/POS commands since XPrinter uses TSPL
@@ -100,8 +108,8 @@ class XPrinterPCB:
             logger.error(f"Error printing PCB label: {e}")
             return False
 
-    def print_pcb_label(self, serial_number, production_date=None):
-        """Print PCB label with serial number and production date using TSPL commands."""
+    def print_pcb_label(self, serial_number, production_date=None, stc_number=None):
+        """Print PCB label with serial number, production date, and STC number using TSPL commands."""
         if not self.printer_name:
             logger.error("XPrinter not found")
             return False
@@ -126,14 +134,18 @@ class XPrinterPCB:
             commands += b'SET TEAR ON\n'         # Tear mode
             commands += b'CLS\n'                 # Clear buffer
             
-            # Center-aligned text fields for 4cm x 2cm label with optimized positioning
-            # Serial number positioned at X=65, Date at X=100 for better alignment
-            
-            # Serial number line - positioned at X=65 for optimal placement
-            commands += b'TEXT 65,40,"3",0,1,1,"' + serial_number.encode('utf-8') + b'"\n'
-            
-            # Production date line - positioned at X=100 for optimal placement
-            commands += b'TEXT 100,90,"3",0,1,1,"' + production_date.encode('utf-8') + b'"\n'
+            # Three line layout for STC, Serial Number, and Date
+            if stc_number:
+                # Use configurable positions
+                commands += f'TEXT {self.stc_x},{self.stc_y},"3",0,1,1,"STC:{str(stc_number)}"\n'.encode('utf-8')
+                commands += f'TEXT {self.serial_x},{self.serial_y},"3",0,1,1,"{serial_number}"\n'.encode('utf-8')
+                commands += f'TEXT {self.date_x},{self.date_y},"3",0,1,1,"{production_date}"\n'.encode('utf-8')
+            else:
+                # Original two-line layout if no STC
+                # Serial number line - positioned at X=65 for optimal placement
+                commands += b'TEXT 65,40,"3",0,1,1,"' + serial_number.encode('utf-8') + b'"\n'
+                # Production date line - positioned at X=100 for optimal placement
+                commands += b'TEXT 100,90,"3",0,1,1,"' + production_date.encode('utf-8') + b'"\n'
             
             commands += b'PRINT 1,1\n'           # Print 1 copy
             
@@ -141,7 +153,10 @@ class XPrinterPCB:
             success = self._send_to_printer(commands)
             
             if success:
-                logger.info(f"Successfully printed PCB label for: {serial_number}")
+                if stc_number:
+                    logger.info(f"Successfully printed PCB label for: {serial_number} (STC: {stc_number})")
+                else:
+                    logger.info(f"Successfully printed PCB label for: {serial_number}")
             else:
                 logger.error(f"Failed to print PCB label for: {serial_number}")
                 
@@ -184,9 +199,26 @@ class XPrinterPCB:
             logger.error(f"Error sending to XPrinter: {e}")
             return False
     
+    def set_positions(self, stc_x=None, stc_y=None, serial_x=None, serial_y=None, date_x=None, date_y=None):
+        """Update text positions dynamically."""
+        if stc_x is not None:
+            self.stc_x = stc_x
+        if stc_y is not None:
+            self.stc_y = stc_y
+        if serial_x is not None:
+            self.serial_x = serial_x
+        if serial_y is not None:
+            self.serial_y = serial_y
+        if date_x is not None:
+            self.date_x = date_x
+        if date_y is not None:
+            self.date_y = date_y
+        
+        logger.info(f"Updated positions - STC:({self.stc_x},{self.stc_y}) Serial:({self.serial_x},{self.serial_y}) Date:({self.date_x},{self.date_y})")
+    
     def test_print(self):
         """Test print functionality."""
-        return self.print_pcb_label("TEST12345")
+        return self.print_pcb_label("TEST12345", stc_number="60999")
     
     def is_available(self):
         """Check if XPrinter is available."""

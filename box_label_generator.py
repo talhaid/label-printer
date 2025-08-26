@@ -43,12 +43,13 @@ class BoxLabelGenerator:
         self.header_font_size = 8   # Reduced
         self.data_font_size = 6     # Reduced
         
-    def generate_sample_devices(self, base_serial: str = "ATS542912923728") -> List[Dict[str, str]]:
+    def generate_sample_devices(self, base_serial: str = "ATS542912923728", start_stc: int = 60000) -> List[Dict[str, str]]:
         """
         Generate 20 sample devices based on the working device data
         
         Args:
             base_serial: Base serial number to modify
+            start_stc: Starting STC number (default: 60000)
             
         Returns:
             List of device dictionaries
@@ -63,8 +64,9 @@ class BoxLabelGenerator:
         }
         
         for i in range(20):
-            # Create variations for each device
+            # Create variations for each device with STC numbers
             device = {
+                "STC": str(start_stc + i),  # STC numbers starting from 60000
                 "SERIAL_NUMBER": f"{base_serial[:-2]}{i+1:02d}",  # Change last 2 digits
                 "IMEI": f"{base_device['IMEI'][:-3]}{i+100:03d}",  # Change last 3 digits
                 "MAC_ADDRESS": f"AA:BB:CC:DD:EE:{i+10:02X}"  # Change last MAC octet
@@ -86,9 +88,9 @@ class BoxLabelGenerator:
         # Use compact format for QR code
         qr_lines = []
         
-        for i, device in enumerate(devices, 1):
-            # Compact format: NUM:SERIAL:IMEI:MAC
-            line = f"{i:02d}:{device['SERIAL_NUMBER']}:{device['IMEI']}:{device['MAC_ADDRESS']}"
+        for device in devices:
+            # Compact format: STC:SERIAL:IMEI:MAC
+            line = f"{device['STC']}:{device['SERIAL_NUMBER']}:{device['IMEI']}:{device['MAC_ADDRESS']}"
             qr_lines.append(line)
             
         return "|".join(qr_lines)  # Use | as separator between devices
@@ -145,9 +147,9 @@ class BoxLabelGenerator:
         header_height = 8 * mm
         
         # Column widths within each column
-        num_width = 8 * mm
-        serial_width = 35 * mm
-        imei_width = 35 * mm
+        num_width = 12 * mm  # Increased for STC numbers
+        serial_width = 32 * mm
+        imei_width = 32 * mm
         mac_width = col_width - num_width - serial_width - imei_width
         
         col_widths = [num_width, serial_width, imei_width, mac_width]
@@ -172,7 +174,7 @@ class BoxLabelGenerator:
         
         # Table headers
         c.setFont("Helvetica-Bold", 6)
-        headers = ["No.", "Serial Number", "IMEI", "MAC"]
+        headers = ["STC", "Serial Number", "IMEI", "MAC"]
         
         current_y = start_y - header_height
         current_x = start_x
@@ -204,7 +206,7 @@ class BoxLabelGenerator:
             
             # Device data - truncate if too long
             row_data = [
-                f"{start_num + i:02d}",
+                device['STC'],  # STC number instead of sequential number
                 device['SERIAL_NUMBER'][-12:] if len(device['SERIAL_NUMBER']) > 12 else device['SERIAL_NUMBER'],  # Last 12 chars
                 device['IMEI'][-12:] if len(device['IMEI']) > 12 else device['IMEI'],  # Last 12 chars
                 device['MAC_ADDRESS']

@@ -86,7 +86,7 @@ class KoliBoxLabelGUI:
         
         # Configure columns
         self.tree.heading("select", text="☑")
-        self.tree.heading("no", text="No.")
+        self.tree.heading("no", text="STC")
         self.tree.heading("serial", text="Serial Number")
         self.tree.heading("imei", text="IMEI")
         self.tree.heading("mac", text="MAC Address")
@@ -186,9 +186,12 @@ class KoliBoxLabelGUI:
             global_idx = start_idx + idx
             is_selected = global_idx in self.selected_devices
             
+            # Get STC from device data
+            stc = device.get('STC', 'N/A')
+            
             self.tree.insert("", tk.END, values=(
                 "☑" if is_selected else "☐",
-                f"{global_idx + 1:02d}",
+                str(stc),  # Show STC instead of sequential number
                 device['SERIAL_NUMBER'],
                 device['IMEI'],
                 device['MAC_ADDRESS'],
@@ -242,8 +245,10 @@ class KoliBoxLabelGUI:
     def create_qr_with_devices(self, devices: List[Dict[str, str]]) -> str:
         """Create QR code with all device data"""
         qr_data = []
-        for i, device in enumerate(devices, 1):
-            qr_data.append(f"{i:02d}:{device['SERIAL_NUMBER']}:{device['IMEI']}:{device['MAC_ADDRESS']}")
+        for device in devices:
+            # Use STC instead of sequential numbers
+            stc = device.get('STC', 'N/A')
+            qr_data.append(f"{stc}:{device['SERIAL_NUMBER']}:{device['IMEI']}:{device['MAC_ADDRESS']}")
         
         qr_string = "|".join(qr_data)
         
@@ -312,8 +317,8 @@ class KoliBoxLabelGUI:
         
         # Column headers
         c.setFont("Helvetica-Bold", 6)
-        c.drawString(3*mm, y, "No.")
-        c.drawString(10*mm, y, "Serial Number")
+        c.drawString(3*mm, y, "STC")
+        c.drawString(12*mm, y, "Serial Number")
         c.drawString(42*mm, y, "IMEI")
         c.drawString(70*mm, y, "MAC")
         y -= 4*mm
@@ -322,10 +327,11 @@ class KoliBoxLabelGUI:
         c.setFont("Courier", 5.5)
         line_height = 3*mm
         
-        for i, device in enumerate(devices, 1):
+        for device in devices:
             if y > 5*mm:
-                c.drawString(3*mm, y, f"{i:02d}")
-                c.drawString(10*mm, y, device['SERIAL_NUMBER'])
+                stc = device.get('STC', 'N/A')
+                c.drawString(3*mm, y, str(stc))
+                c.drawString(12*mm, y, device['SERIAL_NUMBER'])
                 c.drawString(42*mm, y, device['IMEI'])
                 c.drawString(70*mm, y, device['MAC_ADDRESS'])
                 y -= line_height
