@@ -1783,7 +1783,11 @@ For support and updates, check the project documentation."""
         """Create QR code with all device data for box label."""
         qr_data = []
         for i, device in enumerate(devices, 1):
-            qr_data.append(f"{i:02d}:{device['SERIAL_NUMBER']}:{device['IMEI']}:{device['MAC_ADDRESS']}")
+            # Ensure all values are strings to avoid numpy type issues
+            serial = str(device['SERIAL_NUMBER'])
+            imei = str(device['IMEI'])
+            mac = str(device['MAC_ADDRESS'])
+            qr_data.append(f"{i:02d}:{serial}:{imei}:{mac}")
         
         qr_string = "|".join(qr_data)
         
@@ -1807,8 +1811,8 @@ For support and updates, check the project documentation."""
         height = 15 * cm
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        first_serial = devices[0]['SERIAL_NUMBER']
-        last_serial = devices[-1]['SERIAL_NUMBER']
+        first_serial = str(devices[0]['SERIAL_NUMBER'])
+        last_serial = str(devices[-1]['SERIAL_NUMBER'])
         filename = f"gui_box_{box_number}_{first_serial}_{last_serial}_{timestamp}.pdf"
         
         c = canvas.Canvas(filename, pagesize=(width, height))
@@ -1864,9 +1868,9 @@ For support and updates, check the project documentation."""
         for i, device in enumerate(devices, 1):
             if y > 5*mm:
                 c.drawString(3*mm, y, f"{i:02d}")
-                c.drawString(10*mm, y, device['SERIAL_NUMBER'])
-                c.drawString(42*mm, y, device['IMEI'])
-                c.drawString(70*mm, y, device['MAC_ADDRESS'])
+                c.drawString(10*mm, y, str(device['SERIAL_NUMBER']))
+                c.drawString(42*mm, y, str(device['IMEI']))
+                c.drawString(70*mm, y, str(device['MAC_ADDRESS']))
                 y -= line_height
             else:
                 c.setFont("Helvetica", 5)
@@ -1900,9 +1904,9 @@ For support and updates, check the project documentation."""
             for idx in sorted(self.box_selected_devices):
                 device_row = self.box_devices_df.iloc[idx]
                 device_dict = {
-                    'SERIAL_NUMBER': device_row['SERIAL_NUMBER'],
-                    'IMEI': device_row['IMEI'],
-                    'MAC_ADDRESS': device_row['MAC_ADDRESS']
+                    'SERIAL_NUMBER': str(device_row['SERIAL_NUMBER']),
+                    'IMEI': str(device_row['IMEI']),
+                    'MAC_ADDRESS': str(device_row['MAC_ADDRESS'])
                 }
                 selected_device_data.append(device_dict)
                 
