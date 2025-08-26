@@ -125,8 +125,34 @@ class AutoPrinterGUI:
         main_frame = ttk.Frame(notebook)
         notebook.add(main_frame, text="Main Control")
         
+        # Create canvas and scrollbar for scrolling
+        canvas = tk.Canvas(main_frame)
+        scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+        
+        # Configure scrolling
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        # Create window in canvas
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        # Pack canvas and scrollbar
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        # Bind mousewheel to canvas for scrolling
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        
+        # Now use scrollable_frame instead of main_frame for all content
+        
         # Connection Settings
-        conn_frame = ttk.LabelFrame(main_frame, text="Connection Settings")
+        conn_frame = ttk.LabelFrame(scrollable_frame, text="Connection Settings")
         conn_frame.pack(fill="x", padx=5, pady=5)
         
         # Printer selection
@@ -148,7 +174,7 @@ class AutoPrinterGUI:
         self.baud_combo.grid(row=2, column=1, sticky="w", padx=5, pady=2)
         
         # STC Counter Control
-        stc_frame = ttk.LabelFrame(main_frame, text="STC Counter Control")
+        stc_frame = ttk.LabelFrame(scrollable_frame, text="STC Counter Control")
         stc_frame.pack(fill="x", padx=5, pady=5)
         
         ttk.Label(stc_frame, text="Current STC:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
@@ -164,7 +190,7 @@ class AutoPrinterGUI:
         ttk.Button(stc_frame, text="Refresh from CSV", command=self.refresh_stc_from_csv).grid(row=0, column=5, padx=5, pady=2)
         
         # Printing Mode Control
-        mode_frame = ttk.LabelFrame(main_frame, text="Printing Mode")
+        mode_frame = ttk.LabelFrame(scrollable_frame, text="Printing Mode")
         mode_frame.pack(fill="x", padx=5, pady=5)
         
         self.auto_print_mode = tk.BooleanVar(value=True)  # Default to auto-print
@@ -174,7 +200,7 @@ class AutoPrinterGUI:
                        variable=self.auto_print_mode, value=False, command=self.update_mode_display).pack(anchor="w", padx=5, pady=2)
         
         # Control Buttons
-        control_frame = ttk.LabelFrame(main_frame, text="Control")
+        control_frame = ttk.LabelFrame(scrollable_frame, text="Control")
         control_frame.pack(fill="x", padx=5, pady=5)
         
         self.start_button = ttk.Button(control_frame, text="Start Monitoring", command=self.start_monitoring)
@@ -187,7 +213,7 @@ class AutoPrinterGUI:
         self.test_button.pack(side="left", padx=5, pady=5)
         
         # Create notebook for dual tables
-        tables_notebook = ttk.Notebook(main_frame)
+        tables_notebook = ttk.Notebook(scrollable_frame)
         tables_notebook.pack(fill="both", expand=True, padx=5, pady=5)
         
         # Device Labels Table Tab
@@ -296,7 +322,7 @@ class AutoPrinterGUI:
         self.pcb_status_label.pack(side="right", padx=5)
         
         # Status Frame
-        status_frame = ttk.LabelFrame(main_frame, text="Status")
+        status_frame = ttk.LabelFrame(scrollable_frame, text="Status")
         status_frame.pack(fill="x", padx=5, pady=5)
         
         # Status indicator
@@ -345,7 +371,7 @@ class AutoPrinterGUI:
         self.data_text.pack(fill="both", expand=True, padx=5, pady=5)
         
         # Test data input
-        test_frame = ttk.LabelFrame(main_frame, text="Test Data Input")
+        test_frame = ttk.LabelFrame(scrollable_frame, text="Test Data Input")
         test_frame.pack(fill="x", padx=5, pady=5)
         
         self.test_data_entry = ttk.Entry(test_frame, width=70)
