@@ -1,21 +1,12 @@
 # -*- mode: python ; coding: utf-8 -*-
-from PyInstaller.utils.hooks import collect_all
-
-datas = [('save', 'save'), ('device_label_template.zpl', '.')]
-binaries = []
-hiddenimports = ['serial', 'tkinter', 'reportlab', 'qrcode', 'pandas', 'PIL']
-tmp_ret = collect_all('reportlab')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('qrcode')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 
 a = Analysis(
     ['printer_gui.py'],
     pathex=[],
-    binaries=binaries,
-    datas=datas,
-    hiddenimports=hiddenimports,
+    binaries=[],
+    datas=[],
+    hiddenimports=[],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -31,7 +22,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='PrinterSystem',
+    name='PrinterGUI',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

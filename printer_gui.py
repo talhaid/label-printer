@@ -484,6 +484,7 @@ class AutoPrinterGUI:
         ttk.Entry(box_control_frame, textvariable=self.box_number_var, width=10).pack(side=tk.LEFT, padx=(0, 10))
         
         ttk.Button(box_control_frame, text="Create PDF Label", command=self.create_box_pdf_label).pack(side=tk.RIGHT)
+        ttk.Button(box_control_frame, text="📁 Open Box Labels", command=self.open_box_labels_folder).pack(side=tk.RIGHT, padx=(0, 5))
         
         # Selection controls
         ttk.Button(box_control_frame, text="Clear All", command=self.clear_all_box_devices).pack(side=tk.RIGHT, padx=(0, 5))
@@ -1132,6 +1133,18 @@ class AutoPrinterGUI:
         except Exception as e:
             self.log_message(f"Error opening CSV file: {e}", "ERROR")
     
+    def open_box_labels_folder(self):
+        """Open the box labels folder."""
+        try:
+            import subprocess
+            box_labels_folder = os.path.abspath(os.path.join("save", "box_labels"))
+            if os.path.exists(box_labels_folder):
+                subprocess.Popen(f'explorer "{box_labels_folder}"')
+            else:
+                messagebox.showinfo("Info", "Box labels folder will be created when first box label is generated")
+        except Exception as e:
+            self.log_message(f"Error opening box labels folder: {e}", "ERROR")
+    
     def refresh_stc_from_csv(self):
         """Refresh STC counter from CSV file."""
         try:
@@ -1771,23 +1784,43 @@ class AutoPrinterGUI:
             if not filename:
                 return
             
-            # Get current displayed data from treeview
-            import csv
-            with open(filename, 'w', newline='', encoding='utf-8') as file:
-                fieldnames = ["timestamp", "serial_number", "imei", "imsi", "ccid", "mac_address", "stc", "print_status", "zpl_file", "raw_data"]
-                writer = csv.DictWriter(file, fieldnames=fieldnames)
-                
-                writer.writeheader()
-                
-                for item in self.csv_tree.get_children():
-                    values = self.csv_tree.item(item)['values']
-                    row_dict = dict(zip(fieldnames, values))
-                    writer.writerow(row_dict)
+            # Get filtered data based on current view
+            display_data = self.csv_data.copy()
+            show_option = self.csv_show_var.get()
             
-            messagebox.showinfo("Success", f"Data exported to {filename}")
+            if show_option == "Latest 50":
+                display_data = display_data.tail(50)
+            elif show_option == "Latest 100":
+                display_data = display_data.tail(100)
+            elif show_option == "Errors Only":
+                if 'STATUS' in display_data.columns:
+                    display_data = display_data[display_data['STATUS'] == 'PARSE_ERROR']
+            elif show_option == "Valid Only":
+                if 'STATUS' in display_data.columns:
+                    display_data = display_data[display_data['STATUS'] != 'PARSE_ERROR']
             
+            # Apply search filter
+            search_term = self.csv_search_var.get().strip().lower()
+            if search_term:
+                mask = display_data.astype(str).apply(lambda x: x.str.lower().str.contains(search_term, na=False)).any(axis=1)
+                display_data = display_data[mask]
+            
+            # Ask for save location
+            filename = filedialog.asksaveasfilename(
+                defaultextension=".csv",
+                filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
+                initialdir=os.path.join("save", "csv"),
+                initialname=f"filtered_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            )
+            
+            if filename:
+                display_data.to_csv(filename, index=False)
+                messagebox.showinfo("Export Complete", f"Filtered data exported to:\n{filename}\n\nRecords: {len(display_data)}")
+                self.log_message(f"Exported {len(display_data)} filtered records to {filename}", "INFO")
+        
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to export data: {e}")
+            self.log_message(f"Error exporting CSV: {e}", "ERROR")
+            messagebox.showerror("Error", f"Failed to export CSV: {e}")
     
     def show_about(self):
         """Show about dialog."""
@@ -2063,12 +2096,16 @@ For support and updates, check the project documentation."""
         width = 10 * cm
         height = 15 * cm
         
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        first_serial = str(devices[0]['SERIAL_NUMBER'])
-        last_serial = str(devices[-1]['SERIAL_NUMBER'])
-        filename = f"gui_box_{box_number}_{first_serial}_{last_serial}_{timestamp}.pdf"
+        # Ensure box labels folder exists
+        box_labels_folder = os.path.join("save", "box_labels")
+        os.makedirs(box_labels_folder, exist_ok=True)
         
-        c = canvas.Canvas(filename, pagesize=(width, height))
+        # Create filename with box number and date
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{box_number.lower()}_{timestamp}.pdf"
+        filepath = os.path.join(box_labels_folder, filename)
+        
+        c = canvas.Canvas(filepath, pagesize=(width, height))
         
         # QR code at top, 1cm from edge
         y = height - 10*mm
@@ -2132,7 +2169,7 @@ For support and updates, check the project documentation."""
                 break
                 
         c.save()
-        return filename
+        return filepath
         
     def create_box_pdf_label(self):
         """Create box label PDF for selected devices."""
@@ -2166,15 +2203,16 @@ For support and updates, check the project documentation."""
                 selected_device_data.append(device_dict)
                 
             # Generate PDF
-            filename = self.generate_box_label_pdf(selected_device_data, box_number)
+            filepath = self.generate_box_label_pdf(selected_device_data, box_number)
             
             # Log success
-            self.log_message(f"✅ Box label created: {filename} ({len(selected_device_data)} devices)", "INFO")
+            self.log_message(f"✅ Box label created: {os.path.basename(filepath)} ({len(selected_device_data)} devices)", "INFO")
             
             # Show success message
             messagebox.showinfo("Success", 
                               f"Box label created successfully!\n\n"
-                              f"File: {filename}\n"
+                              f"File: {os.path.basename(filepath)}\n"
+                              f"Location: save/box_labels/\n"
                               f"Devices: {len(selected_device_data)}\n"
                               f"Box: {box_number}")
                               
