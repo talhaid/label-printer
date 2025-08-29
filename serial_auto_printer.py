@@ -106,6 +106,11 @@ class DeviceDataParser:
         for i, field_name in enumerate(self.field_names):
             # Clean the value (remove extra spaces)
             clean_value = values[i].strip()
+            
+            # Special handling for SERIAL_NUMBER - ensure ATS prefix
+            if field_name == 'SERIAL_NUMBER':
+                clean_value = self._normalize_serial_number(clean_value)
+            
             device_data[field_name] = clean_value
         
         # Add timestamp (STC will be assigned later during printing)
@@ -114,6 +119,41 @@ class DeviceDataParser:
         
         logger.info(f"Parsed device data: {device_data}")
         return device_data
+    
+    def _normalize_serial_number(self, serial_number: str) -> str:
+        """
+        Normalize serial number to ensure ATS prefix.
+        
+        Args:
+            serial_number (str): Raw serial number from data
+            
+        Returns:
+            str: Normalized serial number with ATS prefix
+        """
+        # Remove any extra spaces
+        serial_number = serial_number.strip()
+        
+        # If already starts with ATS, keep it as is
+        if serial_number.upper().startswith('ATS'):
+            return serial_number.upper()
+        
+        # If it's just numeric, add ATS prefix
+        if serial_number.isdigit():
+            normalized = f"ATS{serial_number}"
+            logger.info(f"Added ATS prefix: {serial_number} → {normalized}")
+            return normalized
+        
+        # If it has other prefix, replace with ATS
+        # Extract just the numeric part and add ATS
+        numeric_part = ''.join(filter(str.isdigit, serial_number))
+        if numeric_part:
+            normalized = f"ATS{numeric_part}"
+            logger.info(f"Replaced prefix with ATS: {serial_number} → {normalized}")
+            return normalized
+        
+        # Fallback: keep original if no numeric part found
+        logger.warning(f"Could not normalize serial number: {serial_number}")
+        return serial_number
     
     def set_pattern(self, pattern: str, field_names: list):
         """
