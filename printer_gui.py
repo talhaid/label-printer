@@ -2445,11 +2445,16 @@ For support and updates, check the project documentation."""
         qr_data = []
         for device in devices:
             # Ensure all values are strings to avoid numpy type issues
-            stc = str(device.get('STC', 'N/A'))  # Get STC from device data
-            serial = str(device['SERIAL_NUMBER'])
-            imei = str(device['IMEI'])
-            mac = str(device['MAC_ADDRESS'])
-            qr_data.append(f"{stc}:{serial}:{imei}:{mac}")  # Use STC instead of sequential number
+            stc = str(device.get('STC', 'N/A'))
+            serial = str(device.get('SERIAL_NUMBER', 'N/A'))
+            imei = str(device.get('IMEI', 'N/A'))
+            imsi = str(device.get('IMSI', 'N/A'))
+            ccid = str(device.get('CCID', 'N/A'))
+            mac = str(device.get('MAC_ADDRESS', 'N/A'))
+            
+            # Include ALL device information in QR code
+            device_info = f"{stc}:{serial}:{imei}:{imsi}:{ccid}:{mac}"
+            qr_data.append(device_info)
         
         qr_string = "|".join(qr_data)
         
@@ -2571,10 +2576,12 @@ For support and updates, check the project documentation."""
             for idx in sorted(self.box_selected_devices):
                 device_row = self.box_devices_df.iloc[idx]
                 device_dict = {
-                    'STC': str(device_row.get('STC', 'N/A')),  # Include STC number
-                    'SERIAL_NUMBER': str(device_row['SERIAL_NUMBER']),
-                    'IMEI': str(device_row['IMEI']),
-                    'MAC_ADDRESS': str(device_row['MAC_ADDRESS'])
+                    'STC': str(device_row.get('STC', 'N/A')),
+                    'SERIAL_NUMBER': str(device_row.get('SERIAL_NUMBER', 'N/A')),
+                    'IMEI': str(device_row.get('IMEI', 'N/A')),
+                    'IMSI': str(device_row.get('IMSI', 'N/A')),  # Include IMSI
+                    'CCID': str(device_row.get('CCID', 'N/A')),  # Include CCID
+                    'MAC_ADDRESS': str(device_row.get('MAC_ADDRESS', 'N/A'))
                 }
                 selected_device_data.append(device_dict)
                 
