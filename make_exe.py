@@ -11,9 +11,12 @@ def main():
     print("🔧 Creating EXE for printer_gui.py")
     print("=" * 40)
     
+    # Use the virtual environment pyinstaller
+    venv_pyinstaller = r"C:\Users\tisma\printertest\.venv\Scripts\pyinstaller.exe"
+    
     # Simple PyInstaller command - no fancy stuff
     cmd = [
-        "pyinstaller",
+        venv_pyinstaller,
         "--onefile",                    # Single EXE
         "--windowed",                   # No console
         "--name=PrinterGUI",            # EXE name  

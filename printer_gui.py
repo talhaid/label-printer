@@ -191,12 +191,12 @@ class AutoPrinterGUI:
         stc_frame.pack(fill="x", padx=5, pady=5)
         
         ttk.Label(stc_frame, text="Current STC:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
-        self.stc_label = ttk.Label(stc_frame, text="6000", font=("Arial", 12, "bold"))
+        self.stc_label = ttk.Label(stc_frame, text="60000", font=("Arial", 12, "bold"))
         self.stc_label.grid(row=0, column=1, sticky="w", padx=5, pady=2)
         
         ttk.Label(stc_frame, text="Set STC:").grid(row=0, column=2, sticky="w", padx=5, pady=2)
         self.stc_entry = ttk.Entry(stc_frame, width=10)
-        self.stc_entry.insert(0, "6000")
+        self.stc_entry.insert(0, "60000")
         self.stc_entry.grid(row=0, column=3, sticky="w", padx=5, pady=2)
         
         ttk.Button(stc_frame, text="Update STC", command=self.update_stc).grid(row=0, column=4, padx=5, pady=2)
@@ -448,7 +448,7 @@ class AutoPrinterGUI:
             print(f"Error updating latest data display: {e}")
 
     def setup_box_labels_tab(self, notebook):
-        """Setup the box labels creation tab."""
+        """Setup the box labels creation tab with editing capabilities."""
         box_frame = ttk.Frame(notebook)
         notebook.add(box_frame, text="Box Labels")
         
@@ -458,87 +458,128 @@ class AutoPrinterGUI:
         self.box_devices_per_page = 20
         self.box_selected_devices = []
         
-        # Top controls frame
-        box_control_frame = ttk.Frame(box_frame)
-        box_control_frame.pack(fill=tk.X, padx=10, pady=5)
+        # Top controls frame - File operations
+        file_control_frame = ttk.LabelFrame(box_frame, text="File Operations")
+        file_control_frame.pack(fill=tk.X, padx=10, pady=5)
         
         # CSV file selection
-        ttk.Label(box_control_frame, text="CSV File:").pack(side=tk.LEFT)
+        ttk.Label(file_control_frame, text="CSV File:").grid(row=0, column=0, sticky="w", padx=5, pady=5)
         self.box_csv_path_var = tk.StringVar()
-        self.box_csv_entry = ttk.Entry(box_control_frame, textvariable=self.box_csv_path_var, width=40)
-        self.box_csv_entry.pack(side=tk.LEFT, padx=(5, 5))
+        self.box_csv_entry = ttk.Entry(file_control_frame, textvariable=self.box_csv_path_var, width=50)
+        self.box_csv_entry.grid(row=0, column=1, padx=5, pady=5)
         
-        ttk.Button(box_control_frame, text="Browse", command=self.browse_box_csv).pack(side=tk.LEFT, padx=(0, 10))
-        ttk.Button(box_control_frame, text="Load", command=self.load_box_csv_data).pack(side=tk.LEFT, padx=(0, 20))
+        ttk.Button(file_control_frame, text="Browse", command=self.browse_box_csv).grid(row=0, column=2, padx=5, pady=5)
+        ttk.Button(file_control_frame, text="Load", command=self.load_box_csv_data).grid(row=0, column=3, padx=5, pady=5)
+        ttk.Button(file_control_frame, text="Save", command=self.save_box_csv_data).grid(row=0, column=4, padx=5, pady=5)
+        ttk.Button(file_control_frame, text="New CSV", command=self.create_new_box_csv).grid(row=0, column=5, padx=5, pady=5)
+        
+        # Data editing controls
+        edit_control_frame = ttk.LabelFrame(box_frame, text="Data Editing")
+        edit_control_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        ttk.Button(edit_control_frame, text="➕ Add Row", command=self.add_box_device_row).pack(side=tk.LEFT, padx=5)
+        ttk.Button(edit_control_frame, text="✏️ Edit Selected", command=self.edit_box_device_row).pack(side=tk.LEFT, padx=5)
+        ttk.Button(edit_control_frame, text="🗑️ Delete Selected", command=self.delete_box_device_row).pack(side=tk.LEFT, padx=5)
+        ttk.Button(edit_control_frame, text="📋 Duplicate Selected", command=self.duplicate_box_device_row).pack(side=tk.LEFT, padx=5)
+        
+        # Separator
+        ttk.Separator(edit_control_frame, orient='vertical').pack(side=tk.LEFT, fill='y', padx=10)
+        
+        ttk.Button(edit_control_frame, text="🔍 Filter Data", command=self.filter_box_data).pack(side=tk.LEFT, padx=5)
+        self.box_filter_var = tk.StringVar()
+        filter_entry = ttk.Entry(edit_control_frame, textvariable=self.box_filter_var, width=20)
+        filter_entry.pack(side=tk.LEFT, padx=5)
+        # Bind filter to update display as user types
+        self.box_filter_var.trace('w', lambda *args: self.filter_box_data())
+        
+        # Navigation and selection controls
+        nav_control_frame = ttk.LabelFrame(box_frame, text="Navigation & Selection")
+        nav_control_frame.pack(fill=tk.X, padx=10, pady=5)
         
         # Page navigation
-        self.box_page_label = ttk.Label(box_control_frame, text="Page: 0/0")
-        self.box_page_label.pack(side=tk.LEFT, padx=(0, 10))
+        self.box_page_label = ttk.Label(nav_control_frame, text="Page: 0/0")
+        self.box_page_label.pack(side=tk.LEFT, padx=(5, 10))
         
-        ttk.Button(box_control_frame, text="◀ Prev", command=self.box_previous_page).pack(side=tk.LEFT, padx=(0, 5))
-        ttk.Button(box_control_frame, text="Next ▶", command=self.box_next_page).pack(side=tk.LEFT, padx=(0, 20))
-        
-        # Box number and create button
-        ttk.Label(box_control_frame, text="Box:").pack(side=tk.LEFT, padx=(0, 5))
-        self.box_number_var = tk.StringVar(value="BOX001")
-        ttk.Entry(box_control_frame, textvariable=self.box_number_var, width=10).pack(side=tk.LEFT, padx=(0, 10))
-        
-        ttk.Button(box_control_frame, text="Create PDF Label", command=self.create_box_pdf_label).pack(side=tk.RIGHT)
-        ttk.Button(box_control_frame, text="📁 Open Box Labels", command=self.open_box_labels_folder).pack(side=tk.RIGHT, padx=(0, 5))
+        ttk.Button(nav_control_frame, text="◀ Prev", command=self.box_previous_page).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Button(nav_control_frame, text="Next ▶", command=self.box_next_page).pack(side=tk.LEFT, padx=(0, 20))
         
         # Selection controls
-        ttk.Button(box_control_frame, text="Clear All", command=self.clear_all_box_devices).pack(side=tk.RIGHT, padx=(0, 5))
-        ttk.Button(box_control_frame, text="Select All", command=self.select_all_box_devices).pack(side=tk.RIGHT, padx=(0, 5))
+        ttk.Button(nav_control_frame, text="Select All Page", command=self.select_all_box_devices).pack(side=tk.LEFT, padx=5)
+        ttk.Button(nav_control_frame, text="Clear Selection", command=self.clear_all_box_devices).pack(side=tk.LEFT, padx=5)
         
         # Selection info
-        self.box_selection_label = ttk.Label(box_control_frame, text="Selected: 0/20")
-        self.box_selection_label.pack(side=tk.RIGHT, padx=(0, 20))
+        self.box_selection_label = ttk.Label(nav_control_frame, text="Selected: 0/20")
+        self.box_selection_label.pack(side=tk.LEFT, padx=(20, 0))
         
-        # Device list frame
-        list_frame = ttk.Frame(box_frame)
+        # Box creation controls
+        box_create_frame = ttk.LabelFrame(box_frame, text="Box Label Creation")
+        box_create_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        ttk.Label(box_create_frame, text="Box Number:").pack(side=tk.LEFT, padx=5)
+        self.box_number_var = tk.StringVar(value="BOX001")
+        ttk.Entry(box_create_frame, textvariable=self.box_number_var, width=15).pack(side=tk.LEFT, padx=5)
+        
+        ttk.Button(box_create_frame, text="Create PDF Label", command=self.create_box_pdf_label).pack(side=tk.LEFT, padx=20)
+        ttk.Button(box_create_frame, text="📁 Open Box Labels", command=self.open_box_labels_folder).pack(side=tk.LEFT, padx=5)
+        
+        # Device list frame with enhanced table
+        list_frame = ttk.LabelFrame(box_frame, text="Device Data")
         list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
         
-        # Create device list with checkboxes
-        columns = ("select", "no", "serial", "imei", "mac", "status", "global_idx")
-        self.box_tree = ttk.Treeview(list_frame, columns=columns, show="headings", height=20, displaycolumns=("select", "no", "serial", "imei", "mac", "status"))
+        # Create device list with more columns and better editing
+        columns = ("select", "stc", "serial", "imei", "imsi", "ccid", "mac", "status", "global_idx")
+        self.box_tree = ttk.Treeview(list_frame, columns=columns, show="headings", height=15, 
+                                   displaycolumns=("select", "stc", "serial", "imei", "imsi", "ccid", "mac", "status"))
         
         # Configure columns
         self.box_tree.heading("select", text="☑")
-        self.box_tree.heading("no", text="STC")  # Changed from "No." to "STC"
+        self.box_tree.heading("stc", text="STC")
         self.box_tree.heading("serial", text="Serial Number")
         self.box_tree.heading("imei", text="IMEI")
+        self.box_tree.heading("imsi", text="IMSI")
+        self.box_tree.heading("ccid", text="CCID")
         self.box_tree.heading("mac", text="MAC Address")
         self.box_tree.heading("status", text="Status")
         
         # Column widths
-        self.box_tree.column("select", width=50, anchor=tk.CENTER)
-        self.box_tree.column("no", width=50, anchor=tk.CENTER)
-        self.box_tree.column("serial", width=180)
-        self.box_tree.column("imei", width=180)
-        self.box_tree.column("mac", width=140)
-        self.box_tree.column("status", width=100)
+        self.box_tree.column("select", width=40, anchor=tk.CENTER)
+        self.box_tree.column("stc", width=60, anchor=tk.CENTER)
+        self.box_tree.column("serial", width=150)
+        self.box_tree.column("imei", width=140)
+        self.box_tree.column("imsi", width=140)
+        self.box_tree.column("ccid", width=140)
+        self.box_tree.column("mac", width=120)
+        self.box_tree.column("status", width=80)
         
-        # Scrollbar for device list
-        box_scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.box_tree.yview)
-        self.box_tree.configure(yscrollcommand=box_scrollbar.set)
+        # Scrollbars for device list
+        box_v_scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.box_tree.yview)
+        box_h_scrollbar = ttk.Scrollbar(list_frame, orient=tk.HORIZONTAL, command=self.box_tree.xview)
+        self.box_tree.configure(yscrollcommand=box_v_scrollbar.set, xscrollcommand=box_h_scrollbar.set)
         
-        # Pack tree and scrollbar
-        self.box_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        box_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        # Pack tree and scrollbars
+        self.box_tree.grid(row=0, column=0, sticky="nsew")
+        box_v_scrollbar.grid(row=0, column=1, sticky="ns")
+        box_h_scrollbar.grid(row=1, column=0, sticky="ew")
         
-        # Bind click events for selection
+        # Configure grid weights
+        list_frame.grid_rowconfigure(0, weight=1)
+        list_frame.grid_columnconfigure(0, weight=1)
+        
+        # Bind events for selection and editing
         self.box_tree.bind("<Button-1>", self.on_box_tree_click)
+        self.box_tree.bind("<Double-1>", self.on_box_tree_double_click)
+        self.box_tree.bind("<Button-3>", self.on_box_tree_right_click)  # Right-click context menu
         
-        # Instructions
-        info_text = """📋 Instructions:
-1. Load CSV file with device data (SERIAL_NUMBER, IMEI, MAC_ADDRESS columns required)
-2. Browse through pages of 20 devices using Previous/Next buttons
-3. Click on device rows to select them (max 20 per box)
-4. Enter box number (e.g., BOX001, BOX002)
-5. Click 'Create PDF Label' to generate box label with QR code and device list"""
+        # Status bar
+        status_frame = ttk.Frame(box_frame)
+        status_frame.pack(fill=tk.X, padx=10, pady=5)
         
-        info_label = ttk.Label(box_frame, text=info_text, justify=tk.LEFT, wraplength=800)
-        info_label.pack(padx=10, pady=5, anchor=tk.W)
+        self.box_status_label = ttk.Label(status_frame, text="Ready - Load or create CSV data to begin")
+        self.box_status_label.pack(side=tk.LEFT)
+        
+        # Data count info
+        self.box_data_info_label = ttk.Label(status_frame, text="Total: 0 | Filtered: 0")
+        self.box_data_info_label.pack(side=tk.RIGHT)
     
     def setup_csv_tab(self, notebook):
         """Setup the CSV management tab."""
@@ -582,7 +623,7 @@ class AutoPrinterGUI:
         self.csv_errors_label.grid(row=0, column=5, sticky="w", padx=5)
         
         ttk.Label(stats_grid, text="Latest STC:").grid(row=1, column=0, sticky="w", padx=5)
-        self.csv_latest_stc_label = ttk.Label(stats_grid, text="6000", font=("Arial", 10, "bold"))
+        self.csv_latest_stc_label = ttk.Label(stats_grid, text="60000", font=("Arial", 10, "bold"))
         self.csv_latest_stc_label.grid(row=1, column=1, sticky="w", padx=5)
         
         ttk.Label(stats_grid, text="File Size:").grid(row=1, column=2, sticky="w", padx=20)
@@ -748,7 +789,7 @@ class AutoPrinterGUI:
             # Create a temporary auto-printer instance to check CSV
             temp_printer = DeviceAutoPrinter(
                 zpl_template=self.current_template,
-                initial_stc=6000
+                initial_stc=60000
             )
             
             # Get the next STC value based on CSV
@@ -765,8 +806,8 @@ class AutoPrinterGUI:
             self.log_message(f"Error initializing STC from CSV: {e}", "WARNING")
             # Use default value
             self.stc_entry.delete(0, "end")
-            self.stc_entry.insert(0, "6000")
-            self.stc_label.config(text="6000")
+            self.stc_entry.insert(0, "60000")
+            self.stc_label.config(text="60000")
     
     def update_printer_list(self):
         """Update the printer dropdown list."""
@@ -827,9 +868,9 @@ class AutoPrinterGUI:
             try:
                 initial_stc = int(self.stc_entry.get())
             except ValueError:
-                initial_stc = 6000
+                initial_stc = 60000
                 self.stc_entry.delete(0, "end")
-                self.stc_entry.insert(0, "6000")
+                self.stc_entry.insert(0, "60000")
             
             # Create auto-printer instance
             self.auto_printer = DeviceAutoPrinter(
@@ -1935,68 +1976,403 @@ For support and updates, check the project documentation."""
             else:
                 raise Exception("Could not decode CSV file with any encoding")
                 
-            # Validate required columns
+            # Ensure all required columns exist
             required_columns = ['SERIAL_NUMBER', 'IMEI', 'MAC_ADDRESS']
-            missing_columns = [col for col in required_columns if col not in self.box_devices_df.columns]
+            for col in required_columns:
+                if col not in self.box_devices_df.columns:
+                    self.box_devices_df[col] = ''
             
-            if missing_columns:
-                messagebox.showerror("Error", f"CSV missing required columns: {', '.join(missing_columns)}")
-                return
-                
-            # Add status column if not exists
-            if 'STATUS' not in self.box_devices_df.columns:
-                self.box_devices_df['STATUS'] = 'Available'
+            # Add optional columns if not exists
+            optional_columns = ['STC', 'IMSI', 'CCID', 'STATUS']
+            for col in optional_columns:
+                if col not in self.box_devices_df.columns:
+                    if col == 'STATUS':
+                        self.box_devices_df[col] = 'Available'
+                    elif col == 'STC':
+                        # Auto-generate STC numbers starting from 60000
+                        self.box_devices_df[col] = range(60000, 60000 + len(self.box_devices_df))
+                    else:
+                        self.box_devices_df[col] = ''
                 
             self.box_current_page = 0
             self.box_selected_devices = []
             self.update_box_device_display()
+            self.update_box_data_info()
+            self.box_status_label.config(text=f"✅ Loaded {len(self.box_devices_df)} devices from CSV")
             self.log_message(f"Loaded {len(self.box_devices_df)} devices for box labels", "INFO")
             
         except Exception as e:
+            self.box_status_label.config(text=f"❌ Error loading CSV: {str(e)}")
             messagebox.showerror("Error", f"Failed to load CSV: {str(e)}")
+    
+    def save_box_csv_data(self):
+        """Save the current box data to CSV file."""
+        if self.box_devices_df is None or len(self.box_devices_df) == 0:
+            messagebox.showwarning("Warning", "No data to save")
+            return
+            
+        csv_path = self.box_csv_path_var.get()
+        if not csv_path:
+            csv_path = filedialog.asksaveasfilename(
+                title="Save CSV Data",
+                defaultextension=".csv",
+                filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
+            )
+            if csv_path:
+                self.box_csv_path_var.set(csv_path)
+        
+        if csv_path:
+            try:
+                self.box_devices_df.to_csv(csv_path, index=False, encoding='utf-8')
+                self.box_status_label.config(text=f"✅ Saved {len(self.box_devices_df)} devices to CSV")
+                self.log_message(f"Saved box data to {csv_path}", "INFO")
+                messagebox.showinfo("Success", f"Data saved to {csv_path}")
+            except Exception as e:
+                self.box_status_label.config(text=f"❌ Error saving CSV: {str(e)}")
+                messagebox.showerror("Error", f"Failed to save CSV: {str(e)}")
+    
+    def create_new_box_csv(self):
+        """Create a new empty CSV for box labels."""
+        # Create empty DataFrame with required columns
+        columns = ['STC', 'SERIAL_NUMBER', 'IMEI', 'IMSI', 'CCID', 'MAC_ADDRESS', 'STATUS']
+        self.box_devices_df = pd.DataFrame(columns=columns)
+        
+        self.box_current_page = 0
+        self.box_selected_devices = []
+        self.box_csv_path_var.set("")
+        
+        self.update_box_device_display()
+        self.update_box_data_info()
+        self.box_status_label.config(text="📝 New CSV created - Add devices manually")
+        self.log_message("Created new CSV for box labels", "INFO")
+    
+    def add_box_device_row(self):
+        """Add a new device row."""
+        dialog = self.create_device_edit_dialog("Add New Device")
+        if dialog:
+            try:
+                # Add to DataFrame
+                new_row = pd.DataFrame([dialog], columns=self.box_devices_df.columns)
+                self.box_devices_df = pd.concat([self.box_devices_df, new_row], ignore_index=True)
+                
+                self.update_box_device_display()
+                self.update_box_data_info()
+                self.box_status_label.config(text="✅ Device added successfully")
+                self.log_message("Added new device to box data", "INFO")
+                
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to add device: {str(e)}")
+    
+    def edit_box_device_row(self):
+        """Edit the selected device row."""
+        selection = self.box_tree.selection()
+        if not selection:
+            messagebox.showwarning("Warning", "Please select a device to edit")
+            return
+        
+        try:
+            # Get the selected item data
+            item = self.box_tree.item(selection[0])
+            values = item['values']
+            global_idx = int(values[8])  # global_idx is the last column
+            
+            # Get current data
+            current_data = self.box_devices_df.iloc[global_idx].to_dict()
+            
+            # Show edit dialog
+            dialog = self.create_device_edit_dialog("Edit Device", current_data)
+            if dialog:
+                # Update DataFrame
+                for col, value in dialog.items():
+                    self.box_devices_df.at[global_idx, col] = value
+                
+                self.update_box_device_display()
+                self.box_status_label.config(text="✅ Device updated successfully")
+                self.log_message("Updated device in box data", "INFO")
+                
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to edit device: {str(e)}")
+    
+    def delete_box_device_row(self):
+        """Delete the selected device row(s)."""
+        selection = self.box_tree.selection()
+        if not selection:
+            messagebox.showwarning("Warning", "Please select device(s) to delete")
+            return
+        
+        if len(selection) == 1:
+            msg = "Delete the selected device?"
+        else:
+            msg = f"Delete {len(selection)} selected devices?"
+            
+        if messagebox.askyesno("Confirm Delete", msg):
+            try:
+                # Get global indices to delete
+                indices_to_delete = []
+                for item_id in selection:
+                    item = self.box_tree.item(item_id)
+                    values = item['values']
+                    global_idx = int(values[8])
+                    indices_to_delete.append(global_idx)
+                
+                # Sort in reverse order to delete from end to beginning
+                indices_to_delete.sort(reverse=True)
+                
+                # Delete rows
+                for idx in indices_to_delete:
+                    self.box_devices_df = self.box_devices_df.drop(idx).reset_index(drop=True)
+                
+                # Clear selection
+                for idx in indices_to_delete:
+                    if idx in self.box_selected_devices:
+                        self.box_selected_devices.remove(idx)
+                
+                self.update_box_device_display()
+                self.update_box_data_info()
+                self.box_status_label.config(text=f"✅ Deleted {len(indices_to_delete)} device(s)")
+                self.log_message(f"Deleted {len(indices_to_delete)} devices from box data", "INFO")
+                
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to delete device(s): {str(e)}")
+    
+    def duplicate_box_device_row(self):
+        """Duplicate the selected device row."""
+        selection = self.box_tree.selection()
+        if not selection:
+            messagebox.showwarning("Warning", "Please select a device to duplicate")
+            return
+        
+        try:
+            # Get the selected item data
+            item = self.box_tree.item(selection[0])
+            values = item['values']
+            global_idx = int(values[8])
+            
+            # Get current data and modify serial number
+            current_data = self.box_devices_df.iloc[global_idx].to_dict()
+            current_data['SERIAL_NUMBER'] = current_data['SERIAL_NUMBER'] + "_COPY"
+            if 'STC' in current_data:
+                # Auto-increment STC
+                max_stc = self.box_devices_df['STC'].max() if len(self.box_devices_df) > 0 else 60000
+                current_data['STC'] = max_stc + 1
+            
+            # Show edit dialog for the duplicated data
+            dialog = self.create_device_edit_dialog("Duplicate Device", current_data)
+            if dialog:
+                # Add to DataFrame
+                new_row = pd.DataFrame([dialog], columns=self.box_devices_df.columns)
+                self.box_devices_df = pd.concat([self.box_devices_df, new_row], ignore_index=True)
+                
+                self.update_box_device_display()
+                self.update_box_data_info()
+                self.box_status_label.config(text="✅ Device duplicated successfully")
+                self.log_message("Duplicated device in box data", "INFO")
+                
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to duplicate device: {str(e)}")
+    
+    def filter_box_data(self):
+        """Filter the box data based on search term."""
+        search_term = self.box_filter_var.get().strip().lower()
+        self.box_current_page = 0  # Reset to first page
+        self.update_box_device_display()
+        
+        if search_term:
+            self.box_status_label.config(text=f"🔍 Filtered by: '{search_term}'")
+        else:
+            self.box_status_label.config(text="📋 Showing all data")
+    
+    def create_device_edit_dialog(self, title, current_data=None):
+        """Create a dialog for editing device data."""
+        dialog = tk.Toplevel(self.root)
+        dialog.title(title)
+        dialog.geometry("500x400")
+        dialog.resizable(False, False)
+        dialog.grab_set()
+        dialog.transient(self.root)
+        
+        # Center the dialog
+        dialog.update_idletasks()
+        x = (dialog.winfo_screenwidth() // 2) - (dialog.winfo_width() // 2)
+        y = (dialog.winfo_screenheight() // 2) - (dialog.winfo_height() // 2)
+        dialog.geometry(f"+{x}+{y}")
+        
+        result = {}
+        
+        # Create form fields
+        fields = ['STC', 'SERIAL_NUMBER', 'IMEI', 'IMSI', 'CCID', 'MAC_ADDRESS', 'STATUS']
+        entries = {}
+        
+        main_frame = ttk.Frame(dialog)
+        main_frame.pack(fill="both", expand=True, padx=20, pady=20)
+        
+        # Form fields
+        for i, field in enumerate(fields):
+            ttk.Label(main_frame, text=f"{field}:").grid(row=i, column=0, sticky="w", padx=5, pady=5)
+            
+            if field == 'STATUS':
+                # Combobox for status
+                entry = ttk.Combobox(main_frame, values=['Available', 'Used', 'Reserved', 'Defective'], width=30)
+                entry.set(current_data.get(field, 'Available') if current_data else 'Available')
+            else:
+                # Regular entry
+                entry = ttk.Entry(main_frame, width=35)
+                if current_data and field in current_data:
+                    entry.insert(0, str(current_data[field]))
+                elif field == 'STC' and not current_data:
+                    # Auto-generate STC for new devices
+                    max_stc = self.box_devices_df['STC'].max() if len(self.box_devices_df) > 0 else 60000
+                    entry.insert(0, str(max_stc + 1))
+            
+            entry.grid(row=i, column=1, padx=5, pady=5)
+            entries[field] = entry
+        
+        # Buttons
+        button_frame = ttk.Frame(main_frame)
+        button_frame.grid(row=len(fields), column=0, columnspan=2, pady=20)
+        
+        def on_save():
+            try:
+                for field, entry in entries.items():
+                    value = entry.get().strip()
+                    if field in ['STC'] and value:
+                        result[field] = int(value)
+                    else:
+                        result[field] = value
+                
+                # Validate required fields
+                required = ['SERIAL_NUMBER', 'IMEI', 'MAC_ADDRESS']
+                for field in required:
+                    if not result.get(field):
+                        messagebox.showerror("Error", f"{field} is required")
+                        return
+                
+                dialog.destroy()
+            except ValueError as e:
+                messagebox.showerror("Error", f"Invalid input: {str(e)}")
+        
+        def on_cancel():
+            result.clear()
+            dialog.destroy()
+        
+        ttk.Button(button_frame, text="Save", command=on_save).pack(side="left", padx=10)
+        ttk.Button(button_frame, text="Cancel", command=on_cancel).pack(side="left", padx=10)
+        
+        # Focus first field
+        entries['SERIAL_NUMBER'].focus()
+        
+        dialog.wait_window()
+        return result if result else None
+    
+    def on_box_tree_double_click(self, event):
+        """Handle double-click on tree item for editing."""
+        self.edit_box_device_row()
+    
+    def on_box_tree_right_click(self, event):
+        """Handle right-click on tree item for context menu."""
+        # Select the item under cursor
+        item = self.box_tree.identify('item', event.x, event.y)
+        if item:
+            self.box_tree.selection_set(item)
+            
+            # Create context menu
+            context_menu = tk.Menu(self.root, tearoff=0)
+            context_menu.add_command(label="✏️ Edit", command=self.edit_box_device_row)
+            context_menu.add_command(label="📋 Duplicate", command=self.duplicate_box_device_row)
+            context_menu.add_separator()
+            context_menu.add_command(label="🗑️ Delete", command=self.delete_box_device_row)
+            
+            # Show context menu
+            try:
+                context_menu.tk_popup(event.x_root, event.y_root)
+            finally:
+                context_menu.grab_release()
+    
+    def update_box_data_info(self):
+        """Update the data information display."""
+        if self.box_devices_df is None:
+            self.box_data_info_label.config(text="Total: 0 | Filtered: 0")
+            return
+        
+        total_count = len(self.box_devices_df)
+        
+        # Apply search filter to count filtered items
+        search_term = self.box_filter_var.get().strip().lower()
+        if search_term:
+            mask = self.box_devices_df.astype(str).apply(
+                lambda x: x.str.lower().str.contains(search_term, na=False)
+            ).any(axis=1)
+            filtered_count = len(self.box_devices_df[mask])
+        else:
+            filtered_count = total_count
+        
+        self.box_data_info_label.config(text=f"Total: {total_count} | Filtered: {filtered_count}")
             
     def update_box_device_display(self):
-        """Update the box device list display for current page."""
+        """Update the box device list display for current page with filtering."""
         if self.box_devices_df is None:
             return
             
         # Clear existing items
         for item in self.box_tree.get_children():
             self.box_tree.delete(item)
+        
+        # Apply search filter
+        search_term = self.box_filter_var.get().strip().lower()
+        if search_term:
+            mask = self.box_devices_df.astype(str).apply(
+                lambda x: x.str.lower().str.contains(search_term, na=False)
+            ).any(axis=1)
+            filtered_df = self.box_devices_df[mask].reset_index(drop=True)
+        else:
+            filtered_df = self.box_devices_df.copy()
             
         # Calculate page info
-        total_devices = len(self.box_devices_df)
-        total_pages = (total_devices + self.box_devices_per_page - 1) // self.box_devices_per_page
+        total_devices = len(filtered_df)
+        total_pages = (total_devices + self.box_devices_per_page - 1) // self.box_devices_per_page if total_devices > 0 else 1
         
-        if total_pages == 0:
+        if total_devices == 0:
             self.box_page_label.config(text="Page: 0/0")
             return
+            
+        # Ensure current page is valid
+        if self.box_current_page >= total_pages:
+            self.box_current_page = max(0, total_pages - 1)
             
         # Get devices for current page
         start_idx = self.box_current_page * self.box_devices_per_page
         end_idx = min(start_idx + self.box_devices_per_page, total_devices)
-        page_devices = self.box_devices_df.iloc[start_idx:end_idx]
+        page_devices = filtered_df.iloc[start_idx:end_idx]
         
-        # Add devices to tree with row indices
+        # Add devices to tree
         for idx, (_, device) in enumerate(page_devices.iterrows()):
             global_idx = start_idx + idx
             is_selected = global_idx in self.box_selected_devices
             
-            # Get STC from device data
-            stc = device.get('STC', 'N/A')
-            
-            # Include global_idx in the values
-            self.box_tree.insert("", tk.END, values=(
+            # Get all values for the enhanced table
+            values = (
                 "☑" if is_selected else "☐",
-                str(stc),  # Show STC instead of sequential number
-                device['SERIAL_NUMBER'],
-                device['IMEI'],
-                device['MAC_ADDRESS'],
-                device.get('STATUS', 'Available'),
+                str(device.get('STC', 'N/A')),
+                str(device.get('SERIAL_NUMBER', '')),
+                str(device.get('IMEI', '')),
+                str(device.get('IMSI', '')),
+                str(device.get('CCID', '')),
+                str(device.get('MAC_ADDRESS', '')),
+                str(device.get('STATUS', 'Available')),
                 global_idx  # Hidden column for global index
-            ), tags=('selected' if is_selected else 'unselected',))
+            )
+            
+            self.box_tree.insert("", tk.END, values=values, 
+                               tags=('selected' if is_selected else 'unselected',))
             
         # Configure tags
+        self.box_tree.tag_configure('selected', background='lightblue')
+        self.box_tree.tag_configure('unselected', background='white')
+        
+        # Update labels
+        self.box_page_label.config(text=f"Page: {self.box_current_page + 1}/{total_pages}")
+        self.box_selection_label.config(text=f"Selected: {len(self.box_selected_devices)}/20")
+        self.update_box_data_info()
         self.box_tree.tag_configure('selected', background='lightblue')
         self.box_tree.tag_configure('unselected', background='white')
         
