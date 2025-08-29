@@ -60,10 +60,11 @@ class DeviceDataParser:
     """Parse device data from serial port using regex patterns."""
     
     def __init__(self):
-        # Default regex pattern for the specified data format
-        # ##ATS542912923728|866988074133496|286019876543210|8991101200003204510|AA:BB:CC:DD:EE:FF##
+        # Updated regex pattern to handle various data formats
+        # More flexible to handle: ##612165404520|866988074129817|286016570017900  |8990011419260179000F|B8:46:52:25:67:68##
+        # And original: ##ATS542912923728|866988074133496|286019876543210|8991101200003204510|AA:BB:CC:DD:EE:FF##
         self.data_pattern = re.compile(
-            r'##([A-Z0-9]+)\|([0-9]+)\|([0-9]+)\|([0-9A-F]+)\|([A-F0-9:]+)##'
+            r'##([A-Z0-9]+)\|([0-9]+)\|([0-9\s]+)\|([0-9A-F]+)\|([A-F0-9:]+)##'
         )
         
         # Field mapping
@@ -103,7 +104,9 @@ class DeviceDataParser:
         # Create device data dictionary
         device_data = {}
         for i, field_name in enumerate(self.field_names):
-            device_data[field_name] = values[i]
+            # Clean the value (remove extra spaces)
+            clean_value = values[i].strip()
+            device_data[field_name] = clean_value
         
         # Add timestamp (STC will be assigned later during printing)
         device_data['TIMESTAMP'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
