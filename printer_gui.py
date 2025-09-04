@@ -2530,24 +2530,45 @@ For support and updates, check the project documentation."""
         if not item:
             return
             
-        # Get the global index from the hidden column
-        values = self.box_tree.item(item, 'values')
-        if len(values) < 9:  # Should have 9 values including global_idx
-            return
+        try:
+            # Get the global index from the hidden column
+            values = self.box_tree.item(item, 'values')
             
-        global_idx = int(values[8])  # The global_idx is in the 9th column (index 8)
-        
-        # Toggle selection
-        if global_idx in self.box_selected_devices:
-            self.box_selected_devices.remove(global_idx)
-        else:
-            if len(self.box_selected_devices) < 20:
-                self.box_selected_devices.append(global_idx)
-            else:
-                messagebox.showwarning("Selection Limit", "Maximum 20 devices can be selected for one box")
+            # Debug: Print values to understand structure
+            print(f"Debug: Tree item values: {values}, length: {len(values)}")
+            
+            # The global_idx should be in the last column (index 8)
+            # But let's be more flexible in case some rows have fewer values
+            if len(values) == 0:
+                print("Debug: No values in tree item")
                 return
                 
-        self.update_box_device_display()
+            # Try to get global_idx from the last position
+            try:
+                global_idx = int(values[-1])  # Get from last position instead of fixed index 8
+                print(f"Debug: Got global_idx: {global_idx}")
+            except (ValueError, IndexError) as e:
+                print(f"Debug: Error getting global_idx: {e}")
+                return
+            
+            # Toggle selection
+            if global_idx in self.box_selected_devices:
+                self.box_selected_devices.remove(global_idx)
+                print(f"Debug: Removed {global_idx} from selection")
+            else:
+                if len(self.box_selected_devices) < 20:
+                    self.box_selected_devices.append(global_idx)
+                    print(f"Debug: Added {global_idx} to selection")
+                else:
+                    messagebox.showwarning("Selection Limit", "Maximum 20 devices can be selected for one box")
+                    return
+                    
+            self.update_box_device_display()
+            
+        except Exception as e:
+            print(f"Debug: Exception in on_box_tree_click: {e}")
+            import traceback
+            traceback.print_exc()
         
     def box_previous_page(self):
         """Go to previous page in box device list."""
