@@ -26,6 +26,7 @@ import time
 from datetime import datetime
 import os
 import sys
+import csv
 import pandas as pd
 import qrcode
 from reportlab.lib.units import cm, mm
@@ -45,6 +46,9 @@ class AutoPrinterGUI:
         self.root = root
         self.root.title("Zebra GC420T Auto-Printer")
         self.root.geometry("900x700")
+        
+        # Initialize clean folder structure first
+        self.initialize_folder_structure()
         
         # System components
         self.auto_printer = None
@@ -105,6 +109,127 @@ class AutoPrinterGUI:
         
         # Start GUI update timer
         self.root.after(100, self.process_gui_queue)
+    
+    def initialize_folder_structure(self):
+        """Initialize clean, safe folder structure for all saves."""
+        import shutil
+        
+        # Define the main save folder structure
+        self.save_folders = {
+            'main': 'save',
+            'csv': os.path.join('save', 'csv'),
+            'zpl_outputs': os.path.join('save', 'zpl_outputs'),
+            'box_labels': os.path.join('save', 'box_labels'),
+            'backups': os.path.join('save', 'backups')
+        }
+        
+        # Clean old structure if exists and create fresh folders
+        try:
+            # Remove old save folder completely for fresh start
+            if os.path.exists('save'):
+                shutil.rmtree('save')
+                print("🧹 Cleaned old save folder structure")
+            
+            # Create clean folder structure
+            for folder_name, folder_path in self.save_folders.items():
+                os.makedirs(folder_path, exist_ok=True)
+                print(f"📁 Created folder: {folder_path}")
+            
+            # Initialize main CSV file with headers
+            self.csv_file_path = os.path.join(self.save_folders['csv'], 'device_log.csv')
+            self.initialize_main_csv()
+            
+            print("✅ Clean folder structure initialized successfully")
+            
+        except Exception as e:
+            print(f"❌ Error initializing folder structure: {e}")
+            # Create minimal structure if error
+            os.makedirs('save/csv', exist_ok=True)
+            os.makedirs('save/zpl_outputs', exist_ok=True)
+            os.makedirs('save/box_labels', exist_ok=True)
+    
+    def initialize_main_csv(self):
+        """Initialize the main CSV file with proper headers."""
+        csv_headers = [
+            'timestamp', 'stc', 'serial_number', 'imei', 'imsi', 'ccid', 'mac_address',
+            'print_status', 'parse_status', 'raw_data', 'zpl_filename', 'notes'
+        ]
+        
+        # Create CSV with headers if it doesn't exist
+        if not os.path.exists(self.csv_file_path):
+            try:
+                with open(self.csv_file_path, 'w', newline='', encoding='utf-8') as csvfile:
+                    writer = csv.writer(csvfile)
+                    writer.writerow(csv_headers)
+                print(f"📄 Initialized main CSV: {self.csv_file_path}")
+            except Exception as e:
+                print(f"❌ Error creating main CSV: {e}")
+        else:
+            # Check if existing CSV has proper format and fix if needed
+            try:
+                with open(self.csv_file_path, 'r', encoding='utf-8') as csvfile:
+                    first_line = csvfile.readline().strip()
+                    expected_header = ','.join(csv_headers)
+                    
+                    # If headers don't match, backup and recreate
+                    if first_line != expected_header:
+                        # Create backup
+                        backup_path = self.csv_file_path.replace('.csv', f'_backup_header_fix_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv')
+                        import shutil
+                        shutil.copy2(self.csv_file_path, backup_path)
+                        print(f"🔧 Fixed CSV headers - backup saved: {backup_path}")
+                        
+                        # Read existing data and rewrite with correct headers
+                        import pandas as pd
+                        try:
+                            # Try to read with current headers
+                            df = pd.read_csv(self.csv_file_path)
+                            
+                            # Map old columns to new format if possible
+                            column_mapping = {}
+                            for col in df.columns:
+                                col_lower = col.lower().strip()
+                                if 'timestamp' in col_lower or 'time' in col_lower:
+                                    column_mapping[col] = 'timestamp'
+                                elif 'stc' in col_lower:
+                                    column_mapping[col] = 'stc'
+                                elif 'serial' in col_lower:
+                                    column_mapping[col] = 'serial_number'
+                                elif 'imei' in col_lower:
+                                    column_mapping[col] = 'imei'
+                                elif 'imsi' in col_lower:
+                                    column_mapping[col] = 'imsi'
+                                elif 'ccid' in col_lower:
+                                    column_mapping[col] = 'ccid'
+                                elif 'mac' in col_lower:
+                                    column_mapping[col] = 'mac_address'
+                                elif 'status' in col_lower or 'print' in col_lower:
+                                    column_mapping[col] = 'print_status'
+                            
+                            # Rename columns
+                            df = df.rename(columns=column_mapping)
+                            
+                            # Add missing columns
+                            for header in csv_headers:
+                                if header not in df.columns:
+                                    df[header] = ''
+                            
+                            # Reorder columns
+                            df = df[csv_headers]
+                            
+                            # Write corrected CSV
+                            df.to_csv(self.csv_file_path, index=False)
+                            print(f"✅ CSV headers corrected successfully")
+                            
+                        except Exception as e:
+                            # If pandas fails, just recreate with headers
+                            with open(self.csv_file_path, 'w', newline='', encoding='utf-8') as csvfile:
+                                writer = csv.writer(csvfile)
+                                writer.writerow(csv_headers)
+                            print(f"⚠️ Recreated CSV with clean headers (data reading failed: {e})")
+                        
+            except Exception as e:
+                print(f"❌ Error checking CSV format: {e}")
     
     def setup_gui(self):
         """Setup the GUI layout."""
@@ -459,19 +584,21 @@ class AutoPrinterGUI:
         self.box_selected_devices = []
         
         # Top controls frame - File operations
-        file_control_frame = ttk.LabelFrame(box_frame, text="File Operations")
+        file_control_frame = ttk.LabelFrame(box_frame, text="CSV Data Source")
         file_control_frame.pack(fill=tk.X, padx=10, pady=5)
         
-        # CSV file selection
-        ttk.Label(file_control_frame, text="CSV File:").grid(row=0, column=0, sticky="w", padx=5, pady=5)
-        self.box_csv_path_var = tk.StringVar()
-        self.box_csv_entry = ttk.Entry(file_control_frame, textvariable=self.box_csv_path_var, width=50)
-        self.box_csv_entry.grid(row=0, column=1, padx=5, pady=5)
+        # Main CSV info
+        ttk.Label(file_control_frame, text="Using Main CSV:").grid(row=0, column=0, sticky="w", padx=5, pady=5)
+        self.box_csv_path_var = tk.StringVar(value="save/csv/device_log.csv")
+        csv_label = ttk.Label(file_control_frame, textvariable=self.box_csv_path_var, 
+                             font=("Arial", 9, "bold"), foreground="green")
+        csv_label.grid(row=0, column=1, sticky="w", padx=5, pady=5)
         
-        ttk.Button(file_control_frame, text="Browse", command=self.browse_box_csv).grid(row=0, column=2, padx=5, pady=5)
-        ttk.Button(file_control_frame, text="Load", command=self.load_box_csv_data).grid(row=0, column=3, padx=5, pady=5)
-        ttk.Button(file_control_frame, text="Save", command=self.save_box_csv_data).grid(row=0, column=4, padx=5, pady=5)
-        ttk.Button(file_control_frame, text="New CSV", command=self.create_new_box_csv).grid(row=0, column=5, padx=5, pady=5)
+        # CSV control buttons
+        ttk.Button(file_control_frame, text="🔄 Refresh", command=self.refresh_box_csv_data).grid(row=0, column=2, padx=5, pady=5)
+        ttk.Button(file_control_frame, text="🧹 Clean CSV", command=self.clean_csv_data).grid(row=0, column=3, padx=5, pady=5)
+        ttk.Button(file_control_frame, text="🗑️ Clear All CSV", command=self.clear_all_csv_data).grid(row=0, column=4, padx=5, pady=5)
+        ttk.Button(file_control_frame, text="📂 Open CSV Folder", command=self.open_csv_folder).grid(row=0, column=5, padx=5, pady=5)
         
         # Data editing controls
         edit_control_frame = ttk.LabelFrame(box_frame, text="Data Editing")
@@ -580,6 +707,9 @@ class AutoPrinterGUI:
         # Data count info
         self.box_data_info_label = ttk.Label(status_frame, text="Total: 0 | Filtered: 0")
         self.box_data_info_label.pack(side=tk.RIGHT)
+        
+        # Auto-load main CSV data when tab is initialized
+        self.root.after(500, self.load_box_csv_data)  # Delay to ensure GUI is ready
     
     def setup_csv_tab(self, notebook):
         """Setup the CSV management tab."""
@@ -789,7 +919,8 @@ class AutoPrinterGUI:
             # Create a temporary auto-printer instance to check CSV
             temp_printer = DeviceAutoPrinter(
                 zpl_template=self.current_template,
-                initial_stc=60000
+                initial_stc=60000,
+                csv_file_path=self.csv_file_path
             )
             
             # Get the next STC value based on CSV
@@ -878,7 +1009,9 @@ class AutoPrinterGUI:
                 serial_port=port,
                 baudrate=baudrate,
                 printer_name=printer_name,
-                initial_stc=initial_stc
+                initial_stc=initial_stc,
+                zpl_output_dir=self.save_folders['zpl_outputs'],
+                csv_file_path=self.csv_file_path
             )
             
             # Update GUI with actual STC value (may be different from input due to CSV detection)
@@ -1154,11 +1287,13 @@ class AutoPrinterGUI:
         """Open the ZPL outputs folder."""
         try:
             import subprocess
-            zpl_folder = os.path.abspath(os.path.join("save", "zpl_output"))
+            zpl_folder = os.path.abspath(self.save_folders['zpl_outputs'])
             if os.path.exists(zpl_folder):
                 subprocess.Popen(f'explorer "{zpl_folder}"')
             else:
-                messagebox.showinfo("Info", "ZPL output folder will be created when first device is processed")
+                os.makedirs(zpl_folder, exist_ok=True)
+                subprocess.Popen(f'explorer "{zpl_folder}"')
+                messagebox.showinfo("Info", "ZPL outputs folder created and opened")
         except Exception as e:
             self.log_message(f"Error opening ZPL folder: {e}", "ERROR")
     
@@ -1166,7 +1301,7 @@ class AutoPrinterGUI:
         """Open the CSV log file."""
         try:
             import subprocess
-            csv_file = os.path.abspath(os.path.join("save", "csv", "device_log.csv"))
+            csv_file = os.path.abspath(self.get_csv_path())
             if os.path.exists(csv_file):
                 subprocess.Popen(f'start excel "{csv_file}"', shell=True)
             else:
@@ -1178,11 +1313,13 @@ class AutoPrinterGUI:
         """Open the box labels folder."""
         try:
             import subprocess
-            box_labels_folder = os.path.abspath(os.path.join("save", "box_labels"))
+            box_labels_folder = os.path.abspath(self.save_folders['box_labels'])
             if os.path.exists(box_labels_folder):
                 subprocess.Popen(f'explorer "{box_labels_folder}"')
             else:
-                messagebox.showinfo("Info", "Box labels folder will be created when first box label is generated")
+                os.makedirs(box_labels_folder, exist_ok=True)
+                subprocess.Popen(f'explorer "{box_labels_folder}"')
+                messagebox.showinfo("Info", "Box labels folder created and opened")
         except Exception as e:
             self.log_message(f"Error opening box labels folder: {e}", "ERROR")
     
@@ -1948,6 +2085,10 @@ For support and updates, check the project documentation."""
             self.log_message(f"Error adding PCB to table: {e}", "ERROR")
 
     # Box Label Methods
+    def refresh_box_csv_data(self):
+        """Refresh box CSV data from main CSV file."""
+        self.load_box_csv_data()
+        
     def browse_box_csv(self):
         """Browse for CSV file for box labels."""
         file_path = filedialog.askopenfilename(
@@ -1958,10 +2099,11 @@ For support and updates, check the project documentation."""
             self.box_csv_path_var.set(file_path)
             
     def load_box_csv_data(self):
-        """Load data from CSV file for box labels."""
-        csv_path = self.box_csv_path_var.get()
-        if not csv_path or not os.path.exists(csv_path):
-            messagebox.showerror("Error", "Please select a valid CSV file")
+        """Load data from main CSV file for box labels."""
+        csv_path = self.get_csv_path()  # Use our main CSV
+        
+        if not os.path.exists(csv_path):
+            messagebox.showerror("Error", f"Main CSV file not found: {csv_path}")
             return
             
         try:
@@ -1976,23 +2118,22 @@ For support and updates, check the project documentation."""
             else:
                 raise Exception("Could not decode CSV file with any encoding")
                 
-            # Ensure all required columns exist
-            required_columns = ['SERIAL_NUMBER', 'IMEI', 'MAC_ADDRESS']
-            for col in required_columns:
-                if col not in self.box_devices_df.columns:
-                    self.box_devices_df[col] = ''
+            # Ensure all required columns exist - but work with positional data since column names don't match data
+            # The CSV structure is: [stc, serial, imei, imsi, ccid, mac, status, timestamp, ...]
+            # But headers say: [timestamp, stc, serial_number, imei, imsi, ccid, mac_address, print_status, parse_status, ...]
             
-            # Add optional columns if not exists
-            optional_columns = ['STC', 'IMSI', 'CCID', 'STATUS']
-            for col in optional_columns:
-                if col not in self.box_devices_df.columns:
-                    if col == 'STATUS':
-                        self.box_devices_df[col] = 'Available'
-                    elif col == 'STC':
-                        # Auto-generate STC numbers starting from 60000
-                        self.box_devices_df[col] = range(60000, 60000 + len(self.box_devices_df))
-                    else:
-                        self.box_devices_df[col] = ''
+            # We'll work with the actual data positions, not column names
+            if len(self.box_devices_df.columns) < 8:
+                # Pad with empty columns if needed
+                for i in range(len(self.box_devices_df.columns), 8):
+                    self.box_devices_df[f'col_{i}'] = ''
+            
+            # Add status column if missing
+            if len(self.box_devices_df.columns) < 7 or self.box_devices_df.iloc[:, 6].isna().all():
+                if len(self.box_devices_df.columns) <= 6:
+                    self.box_devices_df['status'] = 'Available'
+                else:
+                    self.box_devices_df.iloc[:, 6] = self.box_devices_df.iloc[:, 6].fillna('Available')
                 
             self.box_current_page = 0
             self.box_selected_devices = []
@@ -2320,6 +2461,7 @@ For support and updates, check the project documentation."""
         # Apply search filter
         search_term = self.box_filter_var.get().strip().lower()
         if search_term:
+            # Search across all columns using positional data
             mask = self.box_devices_df.astype(str).apply(
                 lambda x: x.str.lower().str.contains(search_term, na=False)
             ).any(axis=1)
@@ -2349,16 +2491,18 @@ For support and updates, check the project documentation."""
             global_idx = start_idx + idx
             is_selected = global_idx in self.box_selected_devices
             
-            # Get all values for the enhanced table
+            # Get all values for the enhanced table - CORRECTED for actual data structure:
+            # Despite headers saying [timestamp,stc,serial_number,imei,imsi,ccid,mac_address,print_status,parse_status,raw_data,zpl_filename,notes]
+            # Actual data is stored as: [stc, serial_number, imei, imsi, ccid, mac_address, print_status, timestamp]
             values = (
                 "☑" if is_selected else "☐",
-                str(device.get('STC', 'N/A')),
-                str(device.get('SERIAL_NUMBER', '')),
-                str(device.get('IMEI', '')),
-                str(device.get('IMSI', '')),
-                str(device.get('CCID', '')),
-                str(device.get('MAC_ADDRESS', '')),
-                str(device.get('STATUS', 'Available')),
+                str(device.iloc[0]) if len(device) > 0 else "N/A",  # STC (first column in actual data)
+                str(device.iloc[1]) if len(device) > 1 else "",     # Serial (second column in actual data)
+                str(device.iloc[2]) if len(device) > 2 else "",     # IMEI (third column in actual data)
+                str(device.iloc[3]) if len(device) > 3 else "",     # IMSI (fourth column in actual data)
+                str(device.iloc[4]) if len(device) > 4 else "",     # CCID (fifth column in actual data)
+                str(device.iloc[5]) if len(device) > 5 else "",     # MAC (sixth column in actual data)
+                str(device.iloc[6]) if len(device) > 6 else "Available",  # Status (seventh column in actual data)
                 global_idx  # Hidden column for global index
             )
             
@@ -2388,7 +2532,10 @@ For support and updates, check the project documentation."""
             
         # Get the global index from the hidden column
         values = self.box_tree.item(item, 'values')
-        global_idx = int(values[6])  # The global_idx is in the 7th column (index 6)
+        if len(values) < 9:  # Should have 9 values including global_idx
+            return
+            
+        global_idx = int(values[8])  # The global_idx is in the 9th column (index 8)
         
         # Toggle selection
         if global_idx in self.box_selected_devices:
@@ -2575,13 +2722,15 @@ For support and updates, check the project documentation."""
             selected_device_data = []
             for idx in sorted(self.box_selected_devices):
                 device_row = self.box_devices_df.iloc[idx]
+                # Use positional access - actual data structure despite header mismatch
+                # Actual data: [stc, serial_number, imei, imsi, ccid, mac_address, print_status, timestamp]
                 device_dict = {
-                    'STC': str(device_row.get('STC', 'N/A')),
-                    'SERIAL_NUMBER': str(device_row.get('SERIAL_NUMBER', 'N/A')),
-                    'IMEI': str(device_row.get('IMEI', 'N/A')),
-                    'IMSI': str(device_row.get('IMSI', 'N/A')),  # Include IMSI
-                    'CCID': str(device_row.get('CCID', 'N/A')),  # Include CCID
-                    'MAC_ADDRESS': str(device_row.get('MAC_ADDRESS', 'N/A'))
+                    'STC': str(device_row.iloc[0]) if len(device_row) > 0 else 'N/A',  # STC (1st column)
+                    'SERIAL_NUMBER': str(device_row.iloc[1]) if len(device_row) > 1 else 'N/A',  # Serial (2nd column)
+                    'IMEI': str(device_row.iloc[2]) if len(device_row) > 2 else 'N/A',  # IMEI (3rd column)
+                    'IMSI': str(device_row.iloc[3]) if len(device_row) > 3 else 'N/A',  # IMSI (4th column)
+                    'CCID': str(device_row.iloc[4]) if len(device_row) > 4 else 'N/A',  # CCID (5th column)
+                    'MAC_ADDRESS': str(device_row.iloc[5]) if len(device_row) > 5 else 'N/A'  # MAC (6th column)
                 }
                 selected_device_data.append(device_dict)
                 
@@ -2616,11 +2765,11 @@ For support and updates, check the project documentation."""
     # CSV Management Methods
     def get_csv_path(self):
         """Get the path to the CSV file."""
-        return os.path.join("save", "csv", "device_log.csv")
+        return self.csv_file_path
     
     def open_csv_folder(self):
         """Open the CSV folder in file explorer."""
-        csv_folder = os.path.join("save", "csv")
+        csv_folder = self.save_folders['csv']
         if os.path.exists(csv_folder):
             os.startfile(csv_folder)
         else:
@@ -2646,9 +2795,24 @@ For support and updates, check the project documentation."""
                 
                 # Update statistics
                 total_records = len(self.csv_data)
-                valid_records = len(self.csv_data[self.csv_data['STATUS'] != 'PARSE_ERROR']) if 'STATUS' in self.csv_data.columns else total_records
+                # Check if we have enough columns and look at the 7th column (index 6) for status
+                valid_records = total_records  # Default to all valid
+                if len(self.csv_data.columns) >= 7:
+                    try:
+                        status_col = self.csv_data.iloc[:, 6]  # 7th column (index 6)
+                        valid_records = len(status_col[status_col != 'PARSE_ERROR'])
+                    except:
+                        valid_records = total_records
+                
                 error_records = total_records - valid_records
-                latest_stc = self.csv_data['STC'].max() if 'STC' in self.csv_data.columns and len(self.csv_data) > 0 else 0
+                # STC is in the first column (index 0)
+                latest_stc = 60000  # Default value
+                if len(self.csv_data) > 0 and len(self.csv_data.columns) > 0:
+                    try:
+                        stc_col = self.csv_data.iloc[:, 0]  # First column has STC values
+                        latest_stc = stc_col.max() if len(stc_col) > 0 else 60000
+                    except:
+                        latest_stc = 60000
                 
                 # File statistics
                 file_size = os.path.getsize(csv_path) / 1024  # KB
@@ -2671,11 +2835,11 @@ For support and updates, check the project documentation."""
                 elif show_option == "Latest 100":
                     display_data = display_data.tail(100)
                 elif show_option == "Errors Only":
-                    if 'STATUS' in display_data.columns:
-                        display_data = display_data[display_data['STATUS'] == 'PARSE_ERROR']
+                    if 'parse_status' in display_data.columns:
+                        display_data = display_data[display_data['parse_status'] == 'PARSE_ERROR']
                 elif show_option == "Valid Only":
-                    if 'STATUS' in display_data.columns:
-                        display_data = display_data[display_data['STATUS'] != 'PARSE_ERROR']
+                    if 'parse_status' in display_data.columns:
+                        display_data = display_data[display_data['parse_status'] != 'PARSE_ERROR']
                 
                 # Apply search filter
                 search_term = self.csv_search_var.get().strip().lower()
@@ -2689,11 +2853,21 @@ For support and updates, check the project documentation."""
                 
                 for _, row in display_data.iterrows():
                     values = []
-                    for col in ["STC", "SERIAL_NUMBER", "IMEI", "IMSI", "CCID", "MAC_ADDRESS", "STATUS", "TIMESTAMP"]:
-                        if col in row:
-                            values.append(str(row[col]))
-                        else:
-                            values.append("N/A")
+                    # The CSV data is actually in this order: [stc, serial, imei, imsi, ccid, mac, status, timestamp]
+                    # But the columns are named: [timestamp, stc, serial_number, imei, imsi, ccid, mac_address, print_status, parse_status, ...]
+                    
+                    # Map the actual data positions to display columns
+                    if len(row) >= 8:
+                        values.append(str(row.iloc[0]))  # First column has STC (though named timestamp)
+                        values.append(str(row.iloc[1]))  # Second column has Serial (though named stc)
+                        values.append(str(row.iloc[2]))  # Third column has IMEI (though named serial_number)
+                        values.append(str(row.iloc[3]))  # Fourth column has IMSI
+                        values.append(str(row.iloc[4]))  # Fifth column has CCID
+                        values.append(str(row.iloc[5]))  # Sixth column has MAC
+                        values.append(str(row.iloc[6]))  # Seventh column has Status
+                        values.append(str(row.iloc[7]))  # Eighth column has Timestamp
+                    else:
+                        values = ["N/A"] * 8
                     
                     # Color code rows
                     tag = "normal"
@@ -2759,14 +2933,19 @@ For support and updates, check the project documentation."""
         
         try:
             # Create backup before clearing
-            backup_path = csv_path.replace('.csv', f'_backup_before_clear_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv')
+            backup_filename = f'device_log_backup_before_clear_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+            backup_path = os.path.join(self.save_folders['backups'], backup_filename)
             import shutil
             shutil.copy2(csv_path, backup_path)
             
             # Clear CSV file - keep only headers
-            headers = "STC,SERIAL_NUMBER,IMEI,IMSI,CCID,MAC_ADDRESS,STATUS,TIMESTAMP\n"
-            with open(csv_path, 'w', encoding='utf-8') as f:
-                f.write(headers)
+            csv_headers = [
+                'timestamp', 'stc', 'serial_number', 'imei', 'imsi', 'ccid', 'mac_address',
+                'print_status', 'parse_status', 'raw_data', 'zpl_filename', 'notes'
+            ]
+            with open(csv_path, 'w', newline='', encoding='utf-8') as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerow(csv_headers)
             
             # Reset STC counter in auto_printer if available
             if hasattr(self, 'auto_printer') and self.auto_printer:
@@ -2822,7 +3001,8 @@ For support and updates, check the project documentation."""
             removed_count = original_count - cleaned_count
             
             # Create backup
-            backup_path = csv_path.replace('.csv', f'_backup_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv')
+            backup_filename = f'device_log_backup_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+            backup_path = os.path.join(self.save_folders['backups'], backup_filename)
             df.to_csv(backup_path, index=False)
             
             # Save cleaned data

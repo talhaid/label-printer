@@ -357,7 +357,8 @@ class DeviceAutoPrinter:
     """Main class that coordinates serial monitoring and printing."""
     
     def __init__(self, zpl_template: str, serial_port: str = None, 
-                 baudrate: int = 9600, printer_name: str = None, initial_stc: int = 60000):
+                 baudrate: int = 9600, printer_name: str = None, initial_stc: int = 60000,
+                 zpl_output_dir: str = None, csv_file_path: str = None):
         """
         Initialize the auto-printer system.
         
@@ -367,6 +368,8 @@ class DeviceAutoPrinter:
             baudrate (int): Serial port baud rate
             printer_name (str): Zebra printer name
             initial_stc (int): Starting STC value (default: 60000)
+            zpl_output_dir (str): Custom ZPL output directory
+            csv_file_path (str): Custom CSV file path
         """
         self.parser = DeviceDataParser()
         self.template = ZPLTemplate(zpl_template)
@@ -377,8 +380,8 @@ class DeviceAutoPrinter:
         self.serial_monitor = SerialPortMonitor(serial_port, baudrate) if serial_port else None
         
         # Initialize file paths first
-        self.zpl_output_dir = os.path.join("save", "zpl_output")
-        self.csv_file_path = os.path.join("save", "csv", "device_log.csv")
+        self.zpl_output_dir = zpl_output_dir or os.path.join("save", "zpl_outputs")
+        self.csv_file_path = csv_file_path or os.path.join("save", "csv", "device_log.csv")
         
         # STC counter management (depends on csv_file_path)
         self.current_stc = self._get_next_stc_from_csv(initial_stc)

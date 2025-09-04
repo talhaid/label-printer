@@ -136,7 +136,7 @@ def create_exe():
         # First try with the spec file
         print("🔧 Building EXE using spec file (this may take a few minutes)...")
         result = subprocess.run([
-            "pyinstaller",
+            sys.executable, "-m", "PyInstaller",
             "--clean",
             "printer_gui.spec"
         ], capture_output=True, text=True)
@@ -151,7 +151,7 @@ def create_exe():
             
             # Fallback to direct command
             cmd = [
-                "pyinstaller",
+                sys.executable, "-m", "PyInstaller",
                 "--onefile",
                 "--windowed",
                 "--name=ZebraPrinterGUI",
