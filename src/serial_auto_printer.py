@@ -41,8 +41,8 @@ except ImportError:
     SERIAL_AVAILABLE = False
     serial = None
 
-from zebra_zpl import ZebraZPL
-from xprinter_pcb import XPrinterPCB
+from .zebra_zpl import ZebraZPL
+from .xprinter_pcb import XPrinterPCB
 
 # Configure logging
 logging.basicConfig(
@@ -622,10 +622,8 @@ class DeviceAutoPrinter:
             raw_data (str): Original raw data from serial port
         """
         try:
-            # CSV format to match GUI expectations: 
-            # timestamp, stc, serial_number, imei, imsi, ccid, mac_address, print_status, parse_status, raw_data, zpl_filename, notes
+            # New CSV format to match GUI expectations
             row_data = [
-                device_data.get('TIMESTAMP', ''),
                 device_data.get('STC', ''),
                 device_data.get('SERIAL_NUMBER', ''),
                 device_data.get('IMEI', ''),
@@ -633,10 +631,7 @@ class DeviceAutoPrinter:
                 device_data.get('CCID', ''),
                 device_data.get('MAC_ADDRESS', ''),
                 'Printed' if print_status.startswith('SUCCESS') else 'Error',
-                'Parsed',
-                raw_data,
-                zpl_filename,
-                ''  # notes column
+                device_data.get('TIMESTAMP', '')
             ]
             
             with open(self.csv_file_path, 'a', newline='', encoding='utf-8') as csvfile:

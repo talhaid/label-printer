@@ -76,29 +76,26 @@ class AutoPrinterGUI:
 ^MD15
 ~SD15
 
-^FO10,50^BQN,2,4
+^FO0,25^BQN,2,4
 ^FDLA,STC:{STC};SN:{SERIAL_NUMBER};IMEI:{IMEI};IMSI:{IMSI};CCID:{CCID};MAC:{MAC_ADDRESS}^FS
 
 ^CF0,18,18
-^FO185,32.5^FDSTC:^FS
-^FO185,70^FDS/N:^FS
-^FO185,107.5^FDIMEI:^FS
-^FO185,145^FDIMSI:^FS
-^FO185,182.5^FDCCID:^FS
-^FO185,220^FDMAC:^FS
+^FO155,2.5^FDSTC:^FS
+^FO155,40^FDS/N:^FS
+^FO155,77.5^FDIMEI:^FS
+^FO155,115^FDIMSI:^FS
+^FO155,152.5^FDCCID:^FS
+^FO155,190^FDMAC:^FS
 
 ^CF0,22,16
-^FO225,32.5^FD{STC}^FS
-^FO225,70^FD{SERIAL_NUMBER}^FS
-^FO225,107.5^FD{IMEI}^FS
-^FO225,145^FD{IMSI}^FS
-^FO225,182.5^FD{CCID}^FS
-^FO225,220^FD{MAC_ADDRESS}^FS
+^FO195,2.5^FD{STC}^FS
+^FO195,40^FD{SERIAL_NUMBER}^FS
+^FO195,77.5^FD{IMEI}^FS
+^FO195,115^FD{IMSI}^FS
+^FO195,152.5^FD{CCID}^FS
+^FO195,190^FD{MAC_ADDRESS}^FS
 
 ^XZ"""
-        
-        # Initialize basic CSV path first
-        self.csv_file_path = os.path.join('save', 'csv', 'device_log.csv')
         
         self.setup_gui()
         self.update_printer_list()
@@ -353,6 +350,115 @@ class AutoPrinterGUI:
         self.test_button = ttk.Button(control_frame, text="Test Print", command=self.test_print)
         self.test_button.pack(side="left", padx=5, pady=5)
         
+        # Create notebook for dual tables
+        tables_notebook = ttk.Notebook(scrollable_frame)
+        tables_notebook.pack(fill="both", expand=True, padx=5, pady=5)
+        
+        # Device Labels Table Tab
+        device_frame = ttk.Frame(tables_notebook)
+        tables_notebook.add(device_frame, text="Device Labels (Zebra)")
+        
+        # Device data table
+        device_table_frame = ttk.Frame(device_frame)
+        device_table_frame.pack(fill="both", expand=True, padx=5, pady=5)
+        
+        # Create treeview for device data
+        columns = ("STC", "Serial", "IMEI", "IMSI", "CCID", "MAC", "Status", "Time")
+        self.data_tree = ttk.Treeview(device_table_frame, columns=columns, show="headings", height=8)
+        
+        # Configure columns
+        self.data_tree.heading("STC", text="STC")
+        self.data_tree.heading("Serial", text="Serial Number")
+        self.data_tree.heading("IMEI", text="IMEI")
+        self.data_tree.heading("IMSI", text="IMSI")
+        self.data_tree.heading("CCID", text="CCID")
+        self.data_tree.heading("MAC", text="MAC Address")
+        self.data_tree.heading("Status", text="Status")
+        self.data_tree.heading("Time", text="Time")
+        
+        self.data_tree.column("STC", width=80)
+        self.data_tree.column("Serial", width=120)
+        self.data_tree.column("IMEI", width=120)
+        self.data_tree.column("IMSI", width=120)
+        self.data_tree.column("CCID", width=120)
+        self.data_tree.column("MAC", width=120)
+        self.data_tree.column("Status", width=100)
+        self.data_tree.column("Time", width=120)
+        
+        # Scrollbar for data table
+        device_scrollbar = ttk.Scrollbar(device_table_frame, orient="vertical", command=self.data_tree.yview)
+        self.data_tree.configure(yscrollcommand=device_scrollbar.set)
+        
+        self.data_tree.pack(side="left", fill="both", expand=True)
+        device_scrollbar.pack(side="right", fill="y")
+        
+        # Data control buttons (only show for queue mode)
+        device_buttons_frame = ttk.Frame(device_frame)
+        device_buttons_frame.pack(fill="x", padx=5, pady=5)
+        
+        self.print_selected_btn = ttk.Button(device_buttons_frame, text="Print Selected", command=self.print_selected_device)
+        self.print_selected_btn.pack(side="left", padx=5)
+        
+        self.print_all_btn = ttk.Button(device_buttons_frame, text="Print All", command=self.print_all_devices)
+        self.print_all_btn.pack(side="left", padx=5)
+        
+        self.remove_selected_btn = ttk.Button(device_buttons_frame, text="Remove Selected", command=self.remove_selected_device)
+        self.remove_selected_btn.pack(side="left", padx=5)
+        
+        self.clear_queue_btn = ttk.Button(device_buttons_frame, text="Clear All", command=self.clear_device_queue)
+        self.clear_queue_btn.pack(side="left", padx=5)
+        
+        self.clear_table_btn = ttk.Button(device_buttons_frame, text="Clear Table", command=self.clear_data_table)
+        self.clear_table_btn.pack(side="left", padx=5)
+        
+        # PCB Labels Table Tab
+        pcb_frame = ttk.Frame(tables_notebook)
+        tables_notebook.add(pcb_frame, text="PCB Labels (XPrinter)")
+        
+        # PCB data table
+        pcb_table_frame = ttk.Frame(pcb_frame)
+        pcb_table_frame.pack(fill="both", expand=True, padx=5, pady=5)
+        
+        # Create treeview for PCB data (simpler - just serial number and status)
+        pcb_columns = ("Serial", "Status", "Time", "Device STC")
+        self.pcb_tree = ttk.Treeview(pcb_table_frame, columns=pcb_columns, show="headings", height=8)
+        
+        # Configure PCB columns
+        self.pcb_tree.heading("Serial", text="Serial Number")
+        self.pcb_tree.heading("Status", text="PCB Status")
+        self.pcb_tree.heading("Time", text="Time")
+        self.pcb_tree.heading("Device STC", text="Device STC")
+        
+        self.pcb_tree.column("Serial", width=150)
+        self.pcb_tree.column("Status", width=120)
+        self.pcb_tree.column("Time", width=120)
+        self.pcb_tree.column("Device STC", width=100)
+        
+        # Scrollbar for PCB data table
+        pcb_scrollbar = ttk.Scrollbar(pcb_table_frame, orient="vertical", command=self.pcb_tree.yview)
+        self.pcb_tree.configure(yscrollcommand=pcb_scrollbar.set)
+        
+        self.pcb_tree.pack(side="left", fill="both", expand=True)
+        pcb_scrollbar.pack(side="right", fill="y")
+        
+        # PCB control buttons
+        pcb_buttons_frame = ttk.Frame(pcb_frame)
+        pcb_buttons_frame.pack(fill="x", padx=5, pady=5)
+        
+        self.pcb_enable_btn = ttk.Button(pcb_buttons_frame, text="Disable PCB Printing", command=self.toggle_pcb_printing)
+        self.pcb_enable_btn.pack(side="left", padx=5)
+        
+        self.pcb_test_btn = ttk.Button(pcb_buttons_frame, text="Test PCB Printer", command=self.test_pcb_printer)
+        self.pcb_test_btn.pack(side="left", padx=5)
+        
+        self.pcb_clear_btn = ttk.Button(pcb_buttons_frame, text="Clear PCB Log", command=self.clear_pcb_log)
+        self.pcb_clear_btn.pack(side="left", padx=5)
+        
+        # PCB printing status
+        self.pcb_enabled = True  # Default enabled
+        self.pcb_status_label = ttk.Label(pcb_buttons_frame, text="PCB Printing: Enabled", foreground="green")
+        self.pcb_status_label.pack(side="right", padx=5)
+        
         # Status Frame
         status_frame = ttk.LabelFrame(scrollable_frame, text="Status")
         status_frame.pack(fill="x", padx=5, pady=5)
@@ -418,7 +524,6 @@ class AutoPrinterGUI:
         self.test_data_entry.pack(side="left", padx=5, pady=5)
         
         ttk.Button(test_frame, text="Test Parse & Print", command=self.test_data_processing).pack(side="left", padx=5, pady=5)
-        ttk.Button(test_frame, text="Test Table", command=self.test_table_data).pack(side="left", padx=5, pady=5)
     
     def setup_latest_data_table(self, parent_frame):
         """Setup the latest received data table with clean layout."""
@@ -689,11 +794,10 @@ class AutoPrinterGUI:
         csv_table_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
         # Create treeview for CSV data
-        csv_columns = ("Time", "STC", "Serial", "IMEI", "IMSI", "CCID", "MAC", "Status")
+        csv_columns = ("STC", "Serial", "IMEI", "IMSI", "CCID", "MAC", "Status", "Time")
         self.csv_tree = ttk.Treeview(csv_table_frame, columns=csv_columns, show="headings", height=15)
         
         # Configure columns
-        self.csv_tree.heading("Time", text="Timestamp")
         self.csv_tree.heading("STC", text="STC")
         self.csv_tree.heading("Serial", text="Serial Number")
         self.csv_tree.heading("IMEI", text="IMEI")
@@ -701,9 +805,9 @@ class AutoPrinterGUI:
         self.csv_tree.heading("CCID", text="CCID")
         self.csv_tree.heading("MAC", text="MAC Address")
         self.csv_tree.heading("Status", text="Status")
+        self.csv_tree.heading("Time", text="Timestamp")
         
         # Column widths
-        self.csv_tree.column("Time", width=150)
         self.csv_tree.column("STC", width=80)
         self.csv_tree.column("Serial", width=150)
         self.csv_tree.column("IMEI", width=150)
@@ -711,6 +815,7 @@ class AutoPrinterGUI:
         self.csv_tree.column("CCID", width=150)
         self.csv_tree.column("MAC", width=130)
         self.csv_tree.column("Status", width=100)
+        self.csv_tree.column("Time", width=150)
         
         # Scrollbar for CSV table
         csv_scrollbar = ttk.Scrollbar(csv_table_frame, orient=tk.VERTICAL, command=self.csv_tree.yview)
@@ -934,6 +1039,12 @@ class AutoPrinterGUI:
                         self.gui_queue.put(('add_to_table', (device_data, 'Printed', timestamp)))
                         # Update latest data display
                         self.gui_queue.put(('device_processed', (device_data, stc_assigned)))
+                        
+                        # Add PCB entry if PCB printing is enabled
+                        if self.pcb_enabled:
+                            serial_number = device_data.get('SERIAL_NUMBER', 'UNKNOWN')
+                            pcb_status = "Printed" if pcb_success else "Failed"
+                            self.gui_queue.put(('add_pcb_to_table', (serial_number, pcb_status, timestamp, stc_assigned)))
                 else:
                     # Queue mode: parse data and add to queue manually
                     device_data = self.auto_printer.parser.parse_data(data)
@@ -1033,10 +1144,11 @@ class AutoPrinterGUI:
                     # Auto-print mode: print immediately
                     success, zpl_filename, stc_assigned, pcb_success = self.auto_printer.print_device_label_with_save(device_data, test_data)
                     if success:
-                        self.log_message(f"Test device printed successfully!", "INFO")
+                        pcb_status_text = " and PCB" if pcb_success else " (PCB failed)" if self.pcb_enabled else ""
+                        self.log_message(f"Test device printed successfully{pcb_status_text}!", "INFO")
                         # Update latest data display
                         self.gui_queue.put(('device_processed', (device_data, stc_assigned)))
-                        messagebox.showinfo("Success", f"Test device printed successfully!")
+                        messagebox.showinfo("Success", f"Test device printed successfully{pcb_status_text}!")
                     else:
                         self.log_message("Test device print failed", "ERROR")
                         messagebox.showerror("Error", "Test device print failed")
@@ -1075,31 +1187,6 @@ class AutoPrinterGUI:
         except Exception as e:
             self.log_message(f"Test processing error: {e}", "ERROR")
             messagebox.showerror("Error", f"Test failed: {e}")
-    
-    def test_table_data(self):
-        """Test adding data directly to the unified table."""
-        try:
-            # Create test device data
-            test_device_data = {
-                'STC': '60001',
-                'SERIAL_NUMBER': 'ATS542912923728',
-                'IMEI': '866988074133496',
-                'IMSI': '286019876543210',
-                'CCID': '8991101200003204510',
-                'MAC_ADDRESS': 'AA:BB:CC:DD:EE:FF'
-            }
-            
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            
-            # Add directly to table via GUI queue (same as normal processing)
-            self.gui_queue.put(('add_to_table', (test_device_data, 'Manual Test', timestamp)))
-            
-            self.log_message(f"Added test data to table: {test_device_data['SERIAL_NUMBER']}", "INFO")
-            messagebox.showinfo("Success", "Test data added to Device Data table!")
-            
-        except Exception as e:
-            self.log_message(f"Test table error: {e}", "ERROR")
-            messagebox.showerror("Error", f"Test table failed: {e}")
     
     def test_regex(self):
         """Test the regex pattern."""
@@ -1931,31 +2018,68 @@ For support and updates, check the project documentation."""
         
         messagebox.showinfo("About", about_text)
     
-    def clear_pcb_log(self):
-        """Clear the PCB log entries from the unified table."""
+    def toggle_pcb_printing(self):
+        """Toggle PCB printing on/off."""
         try:
-            # Clear all entries from the unified data table
-            for item in self.data_tree.get_children():
-                self.data_tree.delete(item)
-            self.log_message("Device log cleared", "INFO")
+            if self.auto_printer:
+                self.pcb_enabled = not self.pcb_enabled
+                self.auto_printer.enable_pcb_printing(self.pcb_enabled)
+                
+                if self.pcb_enabled:
+                    self.pcb_enable_btn.config(text="Disable PCB Printing")
+                    self.pcb_status_label.config(text="PCB Printing: Enabled", foreground="green")
+                else:
+                    self.pcb_enable_btn.config(text="Enable PCB Printing")
+                    self.pcb_status_label.config(text="PCB Printing: Disabled", foreground="red")
+                
+                self.log_message(f"PCB printing {'enabled' if self.pcb_enabled else 'disabled'}", "INFO")
+            else:
+                messagebox.showwarning("Warning", "Auto-printer not initialized")
+                
         except Exception as e:
-            self.log_message(f"Error clearing device log: {e}", "ERROR")
+            self.log_message(f"Error toggling PCB printing: {e}", "ERROR")
+    
+    def test_pcb_printer(self):
+        """Test the PCB printer."""
+        try:
+            if self.auto_printer:
+                if self.auto_printer.is_pcb_printer_available():
+                    success = self.auto_printer.test_pcb_printer()
+                    if success:
+                        self.log_message("PCB printer test successful", "INFO")
+                        messagebox.showinfo("Success", "PCB printer test completed successfully!")
+                    else:
+                        self.log_message("PCB printer test failed", "ERROR")
+                        messagebox.showerror("Error", "PCB printer test failed")
+                else:
+                    messagebox.showwarning("Warning", "XPrinter XP-470B not found")
+            else:
+                messagebox.showwarning("Warning", "Auto-printer not initialized")
+                
+        except Exception as e:
+            self.log_message(f"Error testing PCB printer: {e}", "ERROR")
+            messagebox.showerror("Error", f"PCB printer test error: {e}")
+    
+    def clear_pcb_log(self):
+        """Clear the PCB log table."""
+        try:
+            for item in self.pcb_tree.get_children():
+                self.pcb_tree.delete(item)
+            self.log_message("PCB log cleared", "INFO")
+        except Exception as e:
+            self.log_message(f"Error clearing PCB log: {e}", "ERROR")
     
     def add_pcb_to_table(self, serial_number, status, timestamp, device_stc):
-        """Add a PCB entry to the unified device table."""
+        """Add a PCB entry to the PCB table."""
         try:
-            # Format timestamp to show just time if it contains date
-            time_display = timestamp.split(' ')[1] if ' ' in timestamp else timestamp
-            
-            # Add to unified table with all columns, filling PCB-specific ones
-            values = (device_stc, serial_number, "PCB", "PCB", "PCB", "PCB", f"PCB: {status}", time_display)
-            self.data_tree.insert("", 0, values=values)  # Insert at top
+            values = (serial_number, status, timestamp.split(' ')[1] if ' ' in timestamp else timestamp, device_stc)
+            self.pcb_tree.insert("", 0, values=values)  # Insert at top
             
             # Keep only last 100 entries
-            children = self.data_tree.get_children()
+            children = self.pcb_tree.get_children()
             if len(children) > 100:
                 for child in children[100:]:
-                    self.data_tree.delete(child)
+                    self.pcb_tree.delete(child)
                     
         except Exception as e:
             self.log_message(f"Error adding PCB to table: {e}", "ERROR")
@@ -1994,9 +2118,11 @@ For support and updates, check the project documentation."""
             else:
                 raise Exception("Could not decode CSV file with any encoding")
                 
-            # Ensure all required columns exist
-            # The CSV structure is: [timestamp, stc, serial_number, imei, imsi, ccid, mac_address, print_status, parse_status, ...]
-            # Headers and data match correctly now
+            # Ensure all required columns exist - but work with positional data since column names don't match data
+            # The CSV structure is: [stc, serial, imei, imsi, ccid, mac, status, timestamp, ...]
+            # But headers say: [timestamp, stc, serial_number, imei, imsi, ccid, mac_address, print_status, parse_status, ...]
+            
+            # We'll work with the actual data positions, not column names
             if len(self.box_devices_df.columns) < 8:
                 # Pad with empty columns if needed
                 for i in range(len(self.box_devices_df.columns), 8):
@@ -2365,18 +2491,18 @@ For support and updates, check the project documentation."""
             global_idx = start_idx + idx
             is_selected = global_idx in self.box_selected_devices
             
-            # Get all values for the enhanced table - CORRECTED for actual CSV structure:
-            # CSV headers: [timestamp,stc,serial_number,imei,imsi,ccid,mac_address,print_status,parse_status,raw_data,zpl_filename,notes]
-            # Data positions: [timestamp,stc,serial_number,imei,imsi,ccid,mac_address,print_status,parse_status,...]
+            # Get all values for the enhanced table - CORRECTED for actual data structure:
+            # Despite headers saying [timestamp,stc,serial_number,imei,imsi,ccid,mac_address,print_status,parse_status,raw_data,zpl_filename,notes]
+            # Actual data is stored as: [stc, serial_number, imei, imsi, ccid, mac_address, print_status, timestamp]
             values = (
                 "☑" if is_selected else "☐",
-                str(device.iloc[1]) if len(device) > 1 else "N/A",  # STC (second column: index 1)
-                str(device.iloc[2]) if len(device) > 2 else "",     # Serial (third column: index 2)
-                str(device.iloc[3]) if len(device) > 3 else "",     # IMEI (fourth column: index 3)
-                str(device.iloc[4]) if len(device) > 4 else "",     # IMSI (fifth column: index 4)
-                str(device.iloc[5]) if len(device) > 5 else "",     # CCID (sixth column: index 5)
-                str(device.iloc[6]) if len(device) > 6 else "",     # MAC (seventh column: index 6)
-                str(device.iloc[7]) if len(device) > 7 else "Available",  # Print Status (eighth column: index 7)
+                str(device.iloc[0]) if len(device) > 0 else "N/A",  # STC (first column in actual data)
+                str(device.iloc[1]) if len(device) > 1 else "",     # Serial (second column in actual data)
+                str(device.iloc[2]) if len(device) > 2 else "",     # IMEI (third column in actual data)
+                str(device.iloc[3]) if len(device) > 3 else "",     # IMSI (fourth column in actual data)
+                str(device.iloc[4]) if len(device) > 4 else "",     # CCID (fifth column in actual data)
+                str(device.iloc[5]) if len(device) > 5 else "",     # MAC (sixth column in actual data)
+                str(device.iloc[6]) if len(device) > 6 else "Available",  # Status (seventh column in actual data)
                 global_idx  # Hidden column for global index
             )
             
@@ -2617,14 +2743,15 @@ For support and updates, check the project documentation."""
             selected_device_data = []
             for idx in sorted(self.box_selected_devices):
                 device_row = self.box_devices_df.iloc[idx]
-                # CSV structure: timestamp,stc,serial_number,imei,imsi,ccid,mac_address,print_status,parse_status,raw_data,zpl_filename,notes
+                # Use positional access - actual data structure despite header mismatch
+                # Actual data: [stc, serial_number, imei, imsi, ccid, mac_address, print_status, timestamp]
                 device_dict = {
-                    'STC': str(device_row.iloc[1]) if len(device_row) > 1 else 'N/A',  # STC (2nd column)
-                    'SERIAL_NUMBER': str(device_row.iloc[2]) if len(device_row) > 2 else 'N/A',  # Serial (3rd column)
-                    'IMEI': str(device_row.iloc[3]) if len(device_row) > 3 else 'N/A',  # IMEI (4th column)
-                    'IMSI': str(device_row.iloc[4]) if len(device_row) > 4 else 'N/A',  # IMSI (5th column)
-                    'CCID': str(device_row.iloc[5]) if len(device_row) > 5 else 'N/A',  # CCID (6th column)
-                    'MAC_ADDRESS': str(device_row.iloc[6]) if len(device_row) > 6 else 'N/A'  # MAC (7th column)
+                    'STC': str(device_row.iloc[0]) if len(device_row) > 0 else 'N/A',  # STC (1st column)
+                    'SERIAL_NUMBER': str(device_row.iloc[1]) if len(device_row) > 1 else 'N/A',  # Serial (2nd column)
+                    'IMEI': str(device_row.iloc[2]) if len(device_row) > 2 else 'N/A',  # IMEI (3rd column)
+                    'IMSI': str(device_row.iloc[3]) if len(device_row) > 3 else 'N/A',  # IMSI (4th column)
+                    'CCID': str(device_row.iloc[4]) if len(device_row) > 4 else 'N/A',  # CCID (5th column)
+                    'MAC_ADDRESS': str(device_row.iloc[5]) if len(device_row) > 5 else 'N/A'  # MAC (6th column)
                 }
                 selected_device_data.append(device_dict)
                 
@@ -2689,21 +2816,21 @@ For support and updates, check the project documentation."""
                 
                 # Update statistics
                 total_records = len(self.csv_data)
-                # Check parse_status column (index 8) for errors
+                # Check if we have enough columns and look at the 7th column (index 6) for status
                 valid_records = total_records  # Default to all valid
-                if len(self.csv_data.columns) >= 9:
+                if len(self.csv_data.columns) >= 7:
                     try:
-                        parse_status_col = self.csv_data.iloc[:, 8]  # parse_status column (index 8)
-                        valid_records = len(parse_status_col[parse_status_col != 'PARSE_ERROR'])
+                        status_col = self.csv_data.iloc[:, 6]  # 7th column (index 6)
+                        valid_records = len(status_col[status_col != 'PARSE_ERROR'])
                     except:
                         valid_records = total_records
                 
                 error_records = total_records - valid_records
-                # STC is in the second column (index 1)
+                # STC is in the first column (index 0)
                 latest_stc = 60000  # Default value
-                if len(self.csv_data) > 0 and len(self.csv_data.columns) > 1:
+                if len(self.csv_data) > 0 and len(self.csv_data.columns) > 0:
                     try:
-                        stc_col = self.csv_data.iloc[:, 1]  # Second column has STC values
+                        stc_col = self.csv_data.iloc[:, 0]  # First column has STC values
                         latest_stc = stc_col.max() if len(stc_col) > 0 else 60000
                     except:
                         latest_stc = 60000
@@ -2747,25 +2874,25 @@ For support and updates, check the project documentation."""
                 
                 for _, row in display_data.iterrows():
                     values = []
-                    # CSV structure: timestamp,stc,serial_number,imei,imsi,ccid,mac_address,print_status,parse_status,raw_data,zpl_filename,notes
-                    # Display order: Time, STC, Serial, IMEI, IMSI, CCID, MAC, Status
+                    # The CSV data is actually in this order: [stc, serial, imei, imsi, ccid, mac, status, timestamp]
+                    # But the columns are named: [timestamp, stc, serial_number, imei, imsi, ccid, mac_address, print_status, parse_status, ...]
                     
-                    # Map the correct data positions to display columns
+                    # Map the actual data positions to display columns
                     if len(row) >= 8:
-                        values.append(str(row.iloc[0]))  # timestamp
-                        values.append(str(row.iloc[1]))  # stc
-                        values.append(str(row.iloc[2]))  # serial_number
-                        values.append(str(row.iloc[3]))  # imei
-                        values.append(str(row.iloc[4]))  # imsi
-                        values.append(str(row.iloc[5]))  # ccid
-                        values.append(str(row.iloc[6]))  # mac_address
-                        values.append(str(row.iloc[7]))  # print_status
+                        values.append(str(row.iloc[0]))  # First column has STC (though named timestamp)
+                        values.append(str(row.iloc[1]))  # Second column has Serial (though named stc)
+                        values.append(str(row.iloc[2]))  # Third column has IMEI (though named serial_number)
+                        values.append(str(row.iloc[3]))  # Fourth column has IMSI
+                        values.append(str(row.iloc[4]))  # Fifth column has CCID
+                        values.append(str(row.iloc[5]))  # Sixth column has MAC
+                        values.append(str(row.iloc[6]))  # Seventh column has Status
+                        values.append(str(row.iloc[7]))  # Eighth column has Timestamp
                     else:
                         values = ["N/A"] * 8
                     
-                    # Color code rows - check parse_status (column 8, index 7)
+                    # Color code rows
                     tag = "normal"
-                    if len(row) >= 9 and str(row.iloc[8]) == "PARSE_ERROR":  # parse_status column
+                    if values[6] == "PARSE_ERROR":  # Status column
                         tag = "error"
                     
                     self.csv_tree.insert("", "end", values=values, tags=(tag,))

@@ -1,0 +1,67 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+.env
+
+# PyInstaller
+build/
+dist.zip
+*.spec
+runtime_hooks.py
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Test files
+test_*.py
+*_test.py
+example*.py
+sample_*.py
+demo_*.py
+quick_*.py
+minimal_*.py
+simple_*.py
+
+# Generated outputs
+*.pdf
+*.html
+*.log
+device_log_backup*.csv
+device_log_old*.csv
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*~
+
+# Save folder contents (but keep structure)
+save/csv/*.csv
+save/zpl_outputs/*.zpl
+save/box_labels/*.pdf
+save/backups/*
+
+# Keep save folder structure
+!save/csv/.gitkeep
+!save/zpl_outputs/.gitkeep
+!save/box_labels/.gitkeep
+!save/backups/.gitkeep
+
+# Keep important template and data files
+!device_label_template.zpl
+!cleaned_devices.csv
+!device_log.csv

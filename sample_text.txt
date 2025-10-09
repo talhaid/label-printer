@@ -1,5 +1,0 @@
-Zebra GC420T Test Label
-Date: August 25, 2025
-Status: Testing PDF Print
-|||| || ||| | |||| |||
-123456789012
