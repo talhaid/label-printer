@@ -42,7 +42,6 @@ except ImportError:
     serial = None
 
 from zebra_zpl import ZebraZPL
-from xprinter_pcb import XPrinterPCB
 
 # Configure logging
 logging.basicConfig(
@@ -374,9 +373,6 @@ class DeviceAutoPrinter:
         self.parser = DeviceDataParser()
         self.template = ZPLTemplate(zpl_template)
         self.printer = ZebraZPL(printer_name)
-        # Initialize PCB printer with better coordinates
-        # Using coordinates that worked well in testing: STC(65,45), Serial(65,75), Date(65,105)
-        self.pcb_printer = XPrinterPCB(stc_x=65, stc_y=45, serial_x=65, serial_y=75, date_x=65, date_y=105)
         self.serial_monitor = SerialPortMonitor(serial_port, baudrate) if serial_port else None
         
         # Initialize file paths first
@@ -715,31 +711,11 @@ class DeviceAutoPrinter:
             # Print main label on Zebra
             success = self.printer.send_zpl(zpl_commands)
             
-            # Print PCB label on XPrinter if enabled
+            # PCB functionality removed
             pcb_success = False
-            if self.pcb_printing_enabled and self.pcb_printer.is_available():
-                serial_number = device_data.get('SERIAL_NUMBER', 'UNKNOWN')
-                # Use device timestamp for production date, format as YYYYMMDD
-                production_date = device_data.get('TIMESTAMP', '').split(' ')[0].replace('-', '') if device_data.get('TIMESTAMP') else None
-                # Get STC number from device data
-                stc_number = device_data.get('STC')
-                
-                self.pcb_stats['pcb_prints_attempted'] += 1
-                pcb_success = self.pcb_printer.print_pcb_label(serial_number, production_date, stc_number)
-                
-                if pcb_success:
-                    self.pcb_stats['pcb_prints_successful'] += 1
-                    logger.info(f"Successfully printed PCB label for device {serial_number}")
-                else:
-                    self.pcb_stats['pcb_prints_failed'] += 1
-                    logger.warning(f"Failed to print PCB label for device {serial_number}")
             
             if success:
                 print_status = "SUCCESS"
-                if self.pcb_printing_enabled and pcb_success:
-                    print_status = "SUCCESS_WITH_PCB"
-                elif self.pcb_printing_enabled and not pcb_success:
-                    print_status = "SUCCESS_PCB_FAILED"
                 logger.info(f"Successfully printed label for device {device_data.get('SERIAL_NUMBER', 'UNKNOWN')}")
             else:
                 print_status = "PRINT_FAILED"
@@ -818,21 +794,9 @@ class DeviceAutoPrinter:
         self.pcb_printing_enabled = enabled
         logger.info(f"PCB printing {'enabled' if enabled else 'disabled'}")
     
-    def is_pcb_printer_available(self):
-        """Check if PCB printer is available."""
-        return self.pcb_printer.is_available()
-    
     def get_pcb_stats(self):
         """Get PCB printing statistics."""
-        return self.pcb_stats.copy()
-    
-    def test_pcb_printer(self):
-        """Test the PCB printer."""
-        if not self.pcb_printer.is_available():
-            logger.error("PCB printer not available")
-            return False
-        
-        return self.pcb_printer.test_print()
+        return {'pcb_prints_attempted': 0, 'pcb_prints_successful': 0, 'pcb_prints_failed': 0}
 
 
 # Your specific ZPL template with placeholders

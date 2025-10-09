@@ -52,10 +52,11 @@ a = Analysis(
     pathex=['.'],
     binaries=[],
     datas=[
-        ('device_label_template.zpl', '.'),
-        ('*.csv', '.'),
+        ('templates/device_label_template.zpl', 'templates'),
+        ('templates/manual_box_label_template.html', 'templates'),
         ('serial_auto_printer.py', '.'),
         ('zebra_zpl.py', '.'),
+        ('zebra_printer.py', '.'),
     ],
     hiddenimports=[
         'serial',
