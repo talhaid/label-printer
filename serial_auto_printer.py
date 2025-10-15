@@ -99,15 +99,16 @@ class DeviceDataParser:
     
     def _clean_special_characters(self, data: str) -> str:
         """
-        Clean special whitespace and control characters that might interfere with parsing.
+        Clean special whitespace, control characters, and any non-printable characters.
+        Only keeps letters, numbers, and safe punctuation characters.
         
         Args:
             data (str): Raw data string
             
         Returns:
-            str: Cleaned data string
+            str: Cleaned data string with only safe characters
         """
-        # Replace common problematic characters
+        # First, replace known problematic Unicode characters with spaces
         replacements = {
             '\u00A0': ' ',  # Non-breaking space
             '\u2002': ' ',  # En space
@@ -126,18 +127,42 @@ class DeviceDataParser:
             '\u000C': ' ',  # Form feed
             '\u000D': '',   # Carriage return
             '\u0085': ' ',  # Next line
-            '\u00A0': ' ',  # Non-breaking space
         }
         
         cleaned = data
         for char, replacement in replacements.items():
             cleaned = cleaned.replace(char, replacement)
         
-        # Log if we found special characters
-        if cleaned != data:
-            logger.info(f"Cleaned special characters: {repr(data)} -> {repr(cleaned)}")
+        # Now filter out ALL non-printable ASCII characters
+        # Keep only: letters, numbers, space, and safe punctuation: # | : -
+        filtered_chars = []
+        for char in cleaned:
+            ascii_code = ord(char)
             
-        return cleaned
+            # Keep safe characters:
+            if (
+                (48 <= ascii_code <= 57) or    # 0-9 numbers
+                (65 <= ascii_code <= 90) or    # A-Z uppercase  
+                (97 <= ascii_code <= 122) or   # a-z lowercase
+                ascii_code == 32 or            # space
+                ascii_code == 35 or            # # (hash)
+                ascii_code == 124 or           # | (pipe)
+                ascii_code == 58 or            # : (colon)
+                ascii_code == 45               # - (hyphen)
+            ):
+                filtered_chars.append(char)
+            else:
+                # Log the problematic character for debugging
+                if ascii_code != 32:  # Don't log every space
+                    logger.warning(f"Filtered out non-printable character: ASCII {ascii_code} (0x{ascii_code:02X}) = {repr(char)}")
+        
+        final_cleaned = ''.join(filtered_chars)
+        
+        # Log if we found special characters
+        if final_cleaned != data:
+            logger.info(f"Cleaned problematic characters: {repr(data)} -> {repr(final_cleaned)}")
+            
+        return final_cleaned
 
     def parse_data(self, raw_data: str) -> Optional[Dict[str, str]]:
         """
