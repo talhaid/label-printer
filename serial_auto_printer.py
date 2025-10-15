@@ -61,21 +61,21 @@ class DeviceDataParser:
     def __init__(self):
         self.packet_buffer = ""  # Buffer for incomplete packets
         
-        # Primary pattern - complete 5 fields (handle extra spaces anywhere)
+        # Primary pattern - complete 5 fields (handle ANY whitespace characters)
         self.primary_pattern = re.compile(
-            r'##([A-Z0-9]+)\|([0-9]+)\|([0-9\s]*?)\s*\|([0-9A-F]+)\|([A-F0-9:]+)##'
+            r'##([A-Z0-9]+)\|([0-9]+)\|([0-9]+)\s*\|([0-9A-F]+)\|([A-F0-9:]+)##'
         )
         
-        # Flexible patterns for incomplete data (handle extra spaces anywhere)
+        # Flexible patterns for incomplete data (handle ANY whitespace)
         self.flexible_patterns = [
-            # 3 fields: SERIAL|IMEI|IMSI (like your incomplete data with space)
-            re.compile(r'##([A-Z0-9]+)\|([0-9]+)\|([0-9\s]*?)(?:\s*\|?|##?)'),
-            # 4 fields: SERIAL|IMEI|IMSI|CCID (handle space after IMSI)
-            re.compile(r'##([A-Z0-9]+)\|([0-9]+)\|([0-9\s]*?)\s*\|([0-9A-F]+)(?:\s*\|?|##?)'),
-            # 5 fields but may have spaces: SERIAL|IMEI|IMSI|CCID|MAC
-            re.compile(r'##([A-Z0-9]+)\|([0-9]+)\|([0-9\s]*?)\s*\|([0-9A-F]+)\|([A-F0-9:]+)(?:##?)'),
-            # Any pattern that starts with ##SERIAL|IMEI|IMSI (very flexible)
-            re.compile(r'##([A-Z0-9]+)\|([0-9]+)\|([0-9\s]*?)(.*)'),
+            # 3 fields: SERIAL|IMEI|IMSI (with any whitespace after)
+            re.compile(r'##([A-Z0-9]+)\|([0-9]+)\|([0-9]+)(?:\s*\|?|##?)'),
+            # 4 fields: SERIAL|IMEI|IMSI|CCID (handle whitespace after IMSI)
+            re.compile(r'##([A-Z0-9]+)\|([0-9]+)\|([0-9]+)\s*\|([0-9A-F]+)(?:\s*\|?|##?)'),
+            # 5 fields but may have whitespace: SERIAL|IMEI|IMSI|CCID|MAC
+            re.compile(r'##([A-Z0-9]+)\|([0-9]+)\|([0-9]+)\s*\|([0-9A-F]+)\|([A-F0-9:]+)(?:##?)'),
+            # Ultra flexible - any characters after IMSI
+            re.compile(r'##([A-Z0-9]+)\|([0-9]+)\|([0-9]+)(.*)'),
         ]
         
         # Backup patterns for different formats
@@ -97,6 +97,48 @@ class DeviceDataParser:
             'MAC_ADDRESS'
         ]
     
+    def _clean_special_characters(self, data: str) -> str:
+        """
+        Clean special whitespace and control characters that might interfere with parsing.
+        
+        Args:
+            data (str): Raw data string
+            
+        Returns:
+            str: Cleaned data string
+        """
+        # Replace common problematic characters
+        replacements = {
+            '\u00A0': ' ',  # Non-breaking space
+            '\u2002': ' ',  # En space
+            '\u2003': ' ',  # Em space
+            '\u2004': ' ',  # Three-per-em space
+            '\u2005': ' ',  # Four-per-em space
+            '\u2006': ' ',  # Six-per-em space
+            '\u2007': ' ',  # Figure space
+            '\u2008': ' ',  # Punctuation space
+            '\u2009': ' ',  # Thin space
+            '\u200A': ' ',  # Hair space
+            '\u202F': ' ',  # Narrow no-break space
+            '\u3000': ' ',  # Ideographic space
+            '\u0009': ' ',  # Tab
+            '\u000B': ' ',  # Vertical tab
+            '\u000C': ' ',  # Form feed
+            '\u000D': '',   # Carriage return
+            '\u0085': ' ',  # Next line
+            '\u00A0': ' ',  # Non-breaking space
+        }
+        
+        cleaned = data
+        for char, replacement in replacements.items():
+            cleaned = cleaned.replace(char, replacement)
+        
+        # Log if we found special characters
+        if cleaned != data:
+            logger.info(f"Cleaned special characters: {repr(data)} -> {repr(cleaned)}")
+            
+        return cleaned
+
     def parse_data(self, raw_data: str) -> Optional[Dict[str, str]]:
         """
         Parse device data from raw serial input.
@@ -107,8 +149,9 @@ class DeviceDataParser:
         Returns:
             Dict[str, str]: Parsed device data or None if no match
         """
-        # Clean the data
-        raw_data = raw_data.strip()
+        # Clean the data - remove special characters
+        raw_data = self._clean_special_characters(raw_data.strip())
+        logger.info(f"Parsing data: {repr(raw_data)}")
         
         # Try primary pattern first (complete 5 fields)
         match = self.primary_pattern.search(raw_data)
