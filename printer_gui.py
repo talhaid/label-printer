@@ -548,6 +548,22 @@ class AutoPrinterGUI:
             command=self.copy_packet_buffer
         )
         copy_buffer_btn.grid(row=len(data_fields), column=1, pady=5, sticky="w")
+        
+        # Add copy as label button for manual printing
+        copy_label_btn = ttk.Button(
+            table_frame,
+            text="Copy as Label",
+            command=self.copy_as_label
+        )
+        copy_label_btn.grid(row=len(data_fields) + 1, column=0, pady=5, sticky="ew")
+        
+        # Add edit and copy button for manual value adjustment
+        edit_copy_btn = ttk.Button(
+            table_frame,
+            text="Edit & Copy Label",
+            command=self.edit_and_copy_label
+        )
+        edit_copy_btn.grid(row=len(data_fields) + 1, column=1, pady=5, sticky="ew")
     
     def update_latest_data_display(self, device_data, stc):
         """Update the latest received data table."""
@@ -667,6 +683,178 @@ class AutoPrinterGUI:
         except Exception as e:
             self.log_message(f"Error copying packet buffer: {e}", "ERROR")
             messagebox.showerror("Error", f"Failed to copy packet buffer: {e}")
+
+    def copy_as_label(self):
+        """Copy ZPL template filled with latest received data."""
+        try:
+            # Check if we have latest data
+            if not hasattr(self, 'latest_device_data') or not self.latest_device_data:
+                messagebox.showwarning("Warning", "No latest data available. Please receive device data first.")
+                return
+            
+            # Read the template
+            template_path = os.path.join("templates", "device_label_template.zpl")
+            if not os.path.exists(template_path):
+                messagebox.showerror("Error", f"Template file not found: {template_path}")
+                return
+                
+            with open(template_path, 'r', encoding='utf-8') as f:
+                template = f.read()
+            
+            # Prepare data for template substitution
+            template_data = self.latest_device_data.copy()
+            
+            # Ensure all required fields exist with defaults
+            defaults = {
+                'STC': '0000',
+                'SERIAL_NUMBER': '000000000000',
+                'IMEI': '000000000000000',
+                'IMSI': '000000000000000',
+                'CCID': 'UNKNOWN_CCID',
+                'MAC_ADDRESS': '00:00:00:00:00:00'
+            }
+            
+            for key, default_value in defaults.items():
+                if key not in template_data or template_data[key] in ['---', '', None]:
+                    template_data[key] = default_value
+            
+            # Fill the template
+            filled_template = template.format(**template_data)
+            
+            # Copy to clipboard
+            self.root.clipboard_clear()
+            self.root.clipboard_append(filled_template)
+            self.root.update()
+            
+            self.log_message("ZPL label template copied to clipboard", "INFO")
+            messagebox.showinfo("Success", 
+                f"ZPL label template copied to clipboard!\n\n"
+                f"STC: {template_data['STC']}\n"
+                f"Serial: ATS{template_data['SERIAL_NUMBER']}\n"
+                f"IMEI: {template_data['IMEI']}\n"
+                f"IMSI: {template_data['IMSI']}\n"
+                f"CCID: {template_data['CCID']}\n"
+                f"MAC: {template_data['MAC_ADDRESS']}")
+                
+        except Exception as e:
+            self.log_message(f"Error copying label template: {e}", "ERROR")
+            messagebox.showerror("Error", f"Failed to copy label template: {e}")
+
+    def edit_and_copy_label(self):
+        """Open dialog to edit values and then copy ZPL template."""
+        try:
+            # Get current data or defaults
+            current_data = {}
+            if hasattr(self, 'latest_device_data') and self.latest_device_data:
+                current_data = self.latest_device_data.copy()
+            
+            # Set defaults for missing values
+            defaults = {
+                'STC': '6000',
+                'SERIAL_NUMBER': '612165404520',
+                'IMEI': '866988074129817',
+                'IMSI': '286016570017900',
+                'CCID': '8990011419260179000F',
+                'MAC_ADDRESS': 'B8:46:52:25:67:68'
+            }
+            
+            for key, default_value in defaults.items():
+                if key not in current_data or current_data[key] in ['---', '', None, 'UNKNOWN_CCID', '00:00:00:00:00:00']:
+                    current_data[key] = default_value
+            
+            # Create edit dialog
+            dialog = tk.Toplevel(self.root)
+            dialog.title("Edit Label Values")
+            dialog.geometry("400x300")
+            dialog.resizable(False, False)
+            dialog.transient(self.root)
+            dialog.grab_set()
+            
+            # Center the dialog
+            dialog.update_idletasks()
+            x = (dialog.winfo_screenwidth() // 2) - (dialog.winfo_width() // 2)
+            y = (dialog.winfo_screenheight() // 2) - (dialog.winfo_height() // 2)
+            dialog.geometry(f"+{x}+{y}")
+            
+            # Create entry widgets
+            entries = {}
+            for i, (field, label_text) in enumerate([
+                ('STC', 'STC:'),
+                ('SERIAL_NUMBER', 'Serial Number:'),
+                ('IMEI', 'IMEI:'),
+                ('IMSI', 'IMSI:'),
+                ('CCID', 'CCID:'),
+                ('MAC_ADDRESS', 'MAC Address:')
+            ]):
+                ttk.Label(dialog, text=label_text).grid(row=i, column=0, padx=10, pady=5, sticky="w")
+                
+                entry = ttk.Entry(dialog, width=30)
+                entry.insert(0, str(current_data.get(field, '')))
+                entry.grid(row=i, column=1, padx=10, pady=5, sticky="ew")
+                entries[field] = entry
+            
+            # Result variable
+            result = {'cancelled': True, 'data': {}}
+            
+            def copy_with_values():
+                try:
+                    # Collect values
+                    template_data = {}
+                    for field, entry in entries.items():
+                        template_data[field] = entry.get().strip()
+                    
+                    # Read template
+                    template_path = os.path.join("templates", "device_label_template.zpl")
+                    with open(template_path, 'r', encoding='utf-8') as f:
+                        template = f.read()
+                    
+                    # Fill template
+                    filled_template = template.format(**template_data)
+                    
+                    # Copy to clipboard
+                    self.root.clipboard_clear()
+                    self.root.clipboard_append(filled_template)
+                    self.root.update()
+                    
+                    result['cancelled'] = False
+                    result['data'] = template_data
+                    dialog.destroy()
+                    
+                except Exception as e:
+                    messagebox.showerror("Error", f"Failed to generate label: {e}")
+            
+            def cancel():
+                dialog.destroy()
+            
+            # Buttons
+            button_frame = ttk.Frame(dialog)
+            button_frame.grid(row=6, column=0, columnspan=2, pady=20)
+            
+            ttk.Button(button_frame, text="Copy Label", command=copy_with_values).pack(side="left", padx=5)
+            ttk.Button(button_frame, text="Cancel", command=cancel).pack(side="left", padx=5)
+            
+            # Configure grid weights
+            dialog.grid_columnconfigure(1, weight=1)
+            
+            # Wait for dialog to close
+            dialog.wait_window()
+            
+            # Show result if not cancelled
+            if not result['cancelled']:
+                self.log_message("Custom ZPL label template copied to clipboard", "INFO")
+                data = result['data']
+                messagebox.showinfo("Success", 
+                    f"Custom ZPL label template copied to clipboard!\n\n"
+                    f"STC: {data['STC']}\n"
+                    f"Serial: ATS{data['SERIAL_NUMBER']}\n"
+                    f"IMEI: {data['IMEI']}\n"
+                    f"IMSI: {data['IMSI']}\n"
+                    f"CCID: {data['CCID']}\n"
+                    f"MAC: {data['MAC_ADDRESS']}")
+                    
+        except Exception as e:
+            self.log_message(f"Error opening edit dialog: {e}", "ERROR")
+            messagebox.showerror("Error", f"Failed to open edit dialog: {e}")
 
     def setup_box_labels_tab(self, notebook):
         """Setup the box labels creation tab with editing capabilities."""
