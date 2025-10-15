@@ -102,6 +102,7 @@ class AutoPrinterGUI:
         
         self.setup_gui()
         self.update_printer_list()
+        self.update_pcb_printer_list()
         self.update_port_list()
         
         # Initialize STC counter from CSV
@@ -297,22 +298,33 @@ class AutoPrinterGUI:
         conn_frame.pack(fill="x", padx=5, pady=5)
         
         # Printer selection
-        ttk.Label(conn_frame, text="Printer:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
+        ttk.Label(conn_frame, text="Label Printer:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
         self.printer_combo = ttk.Combobox(conn_frame, width=40)
         self.printer_combo.grid(row=0, column=1, padx=5, pady=2)
         ttk.Button(conn_frame, text="Refresh", command=self.update_printer_list).grid(row=0, column=2, padx=5, pady=2)
         
+        # PCB Printer selection
+        ttk.Label(conn_frame, text="PCB Printer:").grid(row=1, column=0, sticky="w", padx=5, pady=2)
+        self.pcb_printer_combo = ttk.Combobox(conn_frame, width=40)
+        self.pcb_printer_combo.grid(row=1, column=1, padx=5, pady=2)
+        ttk.Button(conn_frame, text="Refresh", command=self.update_pcb_printer_list).grid(row=1, column=2, padx=5, pady=2)
+        
+        # PCB Enable checkbox
+        self.pcb_enabled_var = tk.BooleanVar(value=True)
+        self.pcb_enabled_cb = ttk.Checkbutton(conn_frame, text="Enable PCB Printing", variable=self.pcb_enabled_var)
+        self.pcb_enabled_cb.grid(row=2, column=0, columnspan=2, sticky="w", padx=5, pady=2)
+        
         # Serial port selection
-        ttk.Label(conn_frame, text="Serial Port:").grid(row=1, column=0, sticky="w", padx=5, pady=2)
+        ttk.Label(conn_frame, text="Serial Port:").grid(row=3, column=0, sticky="w", padx=5, pady=2)
         self.port_combo = ttk.Combobox(conn_frame, width=20)
-        self.port_combo.grid(row=1, column=1, sticky="w", padx=5, pady=2)
-        ttk.Button(conn_frame, text="Refresh", command=self.update_port_list).grid(row=1, column=2, padx=5, pady=2)
+        self.port_combo.grid(row=3, column=1, sticky="w", padx=5, pady=2)
+        ttk.Button(conn_frame, text="Refresh", command=self.update_port_list).grid(row=3, column=2, padx=5, pady=2)
         
         # Baud rate
-        ttk.Label(conn_frame, text="Baud Rate:").grid(row=2, column=0, sticky="w", padx=5, pady=2)
+        ttk.Label(conn_frame, text="Baud Rate:").grid(row=4, column=0, sticky="w", padx=5, pady=2)
         self.baud_combo = ttk.Combobox(conn_frame, values=["9600", "19200", "38400", "57600", "115200"], width=20)
         self.baud_combo.set("115200")  # Default to 115200
-        self.baud_combo.grid(row=2, column=1, sticky="w", padx=5, pady=2)
+        self.baud_combo.grid(row=4, column=1, sticky="w", padx=5, pady=2)
         
         # STC Counter Control
         stc_frame = ttk.LabelFrame(scrollable_frame, text="STC Counter Control")
@@ -1203,6 +1215,7 @@ class AutoPrinterGUI:
             temp_printer = DeviceAutoPrinter(
                 zpl_template=self.current_template,
                 initial_stc=60000,
+                pcb_printer_name=None,  # No PCB printer needed for STC check
                 csv_file_path=self.csv_file_path
             )
             
@@ -1231,7 +1244,7 @@ class AutoPrinterGUI:
             
             # Auto-select Zebra or XPrinter if found
             for printer in printers:
-                if any(x in printer.lower() for x in ['zebra', 'gc420', 'zdesigner', 'xprinter', 'xp-', 'xp58']):
+                if any(x in printer.lower() for x in ['zebra', 'gc420', 'zdesigner', 'xprinter', 'xp-470', 'xp58', 'xp80', 'xp365', 'pcb', 'thermal']):
                     self.printer_combo.set(printer)
                     break
             else:
@@ -1240,6 +1253,28 @@ class AutoPrinterGUI:
                 
         except Exception as e:
             self.log_message(f"Error updating printer list: {e}", "ERROR")
+    
+    def update_pcb_printer_list(self):
+        """Update the PCB printer dropdown list."""
+        try:
+            printers = self.printer.list_printers()
+            self.pcb_printer_combo['values'] = printers
+            
+            # Auto-select PCB printer if found (different from main printer)
+            main_printer = self.printer_combo.get()
+            for printer in printers:
+                if printer != main_printer and any(x in printer.lower() for x in ['pcb', 'controller', 'xprinter', 'thermal']):
+                    self.pcb_printer_combo.set(printer)
+                    break
+            else:
+                # If no specific PCB printer found, select a different one from main
+                for printer in printers:
+                    if printer != main_printer:
+                        self.pcb_printer_combo.set(printer)
+                        break
+                
+        except Exception as e:
+            self.log_message(f"Error updating PCB printer list: {e}", "ERROR")
     
     def update_port_list(self):
         """Update the serial port dropdown list."""
@@ -1287,15 +1322,21 @@ class AutoPrinterGUI:
                 self.stc_entry.insert(0, "60000")
             
             # Create auto-printer instance
+            pcb_printer_name = self.pcb_printer_combo.get() if hasattr(self, 'pcb_printer_combo') else None
             self.auto_printer = DeviceAutoPrinter(
                 zpl_template=template,
                 serial_port=port,
                 baudrate=baudrate,
                 printer_name=printer_name,
+                pcb_printer_name=pcb_printer_name,
                 initial_stc=initial_stc,
                 zpl_output_dir=self.save_folders['zpl_outputs'],
                 csv_file_path=self.csv_file_path
             )
+            
+            # Set PCB printing enabled state
+            if hasattr(self, 'pcb_enabled_var'):
+                self.auto_printer.enable_pcb_printing(self.pcb_enabled_var.get())
             
             # Update GUI with actual STC value (may be different from input due to CSV detection)
             actual_stc = self.auto_printer.current_stc
@@ -2346,6 +2387,7 @@ Date: December 2024
 
 Features:
 - Multi-printer support (Zebra GC420T & XPrinter)
+- Simultaneous dual printing (Label + PCB)
 - Dual-mode operation (Auto-Print / Queue)
 - Real-time serial monitoring  
 - CSV data logging and viewing

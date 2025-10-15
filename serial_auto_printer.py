@@ -574,7 +574,7 @@ class DeviceAutoPrinter:
     """Main class that coordinates serial monitoring and printing."""
     
     def __init__(self, zpl_template: str, serial_port: str = None, 
-                 baudrate: int = 9600, printer_name: str = None, initial_stc: int = 60000,
+                 baudrate: int = 9600, printer_name: str = None, pcb_printer_name: str = None, initial_stc: int = 60000,
                  zpl_output_dir: str = None, csv_file_path: str = None, debug_mode: bool = False):
         """
         Initialize the auto-printer system.
@@ -593,6 +593,7 @@ class DeviceAutoPrinter:
         self.parser = DeviceDataParser()
         self.template = ZPLTemplate(zpl_template)
         self.printer = ZebraZPL(printer_name, debug_mode=debug_mode)
+        self.pcb_printer = ZebraZPL(pcb_printer_name, debug_mode=debug_mode) if pcb_printer_name else None
         self.serial_monitor = SerialPortMonitor(serial_port, baudrate) if serial_port else None
         
         # Initialize file paths first
@@ -928,11 +929,29 @@ class DeviceAutoPrinter:
             # Save ZPL file
             zpl_filename = self._save_zpl_file(device_data, zpl_commands)
             
-            # Print main label on Zebra
+            # Print main label on Zebra/XPrinter
             success = self.printer.send_zpl(zpl_commands)
             
-            # PCB functionality removed
+            # PCB printing functionality
             pcb_success = False
+            if self.pcb_printing_enabled and self.pcb_printer:
+                try:
+                    # Create PCB label data
+                    pcb_data = self._create_pcb_label_data(device_data)
+                    pcb_success = self.pcb_printer.send_zpl(pcb_data)
+                    
+                    self.pcb_stats['pcb_prints_attempted'] += 1
+                    if pcb_success:
+                        self.pcb_stats['pcb_prints_successful'] += 1
+                        logger.info(f"Successfully printed PCB label for device {device_data.get('SERIAL_NUMBER', 'UNKNOWN')}")
+                    else:
+                        self.pcb_stats['pcb_prints_failed'] += 1
+                        logger.error(f"Failed to print PCB label for device {device_data.get('SERIAL_NUMBER', 'UNKNOWN')}")
+                        
+                except Exception as e:
+                    self.pcb_stats['pcb_prints_failed'] += 1
+                    logger.error(f"Error printing PCB label: {e}")
+                    pcb_success = False
             
             if success:
                 print_status = "SUCCESS"
@@ -951,6 +970,28 @@ class DeviceAutoPrinter:
             print_status = f"ERROR: {str(e)}"
             self._log_to_csv(device_data, print_status, zpl_filename, raw_data)
             return False, zpl_filename, stc_assigned, False
+    
+    def _create_pcb_label_data(self, device_data: Dict[str, str]) -> str:
+        """
+        Create PCB label data for PCB printing controller.
+        
+        Args:
+            device_data (Dict[str, str]): Device data dictionary
+            
+        Returns:
+            str: PCB ZPL commands
+        """
+        # Create a simple PCB label with essential device info
+        serial_number = device_data.get('SERIAL_NUMBER', 'UNKNOWN')
+        stc = device_data.get('STC', 'UNKNOWN')
+        
+        # Simple PCB label template - adjust coordinates as needed for your PCB printer
+        pcb_zpl = f"""^XA
+^FO10,10^A0N,30,25^FD{serial_number}^FS
+^FO10,50^A0N,20,15^FDSTC: {stc}^FS
+^XZ"""
+        
+        return pcb_zpl
     
     def print_device_label(self, device_data: Dict[str, str]) -> bool:
         """
@@ -992,6 +1033,24 @@ class DeviceAutoPrinter:
         
         logger.info("Device auto-printer system stopped")
         self._log_final_stats()
+    
+    def set_pcb_printer(self, pcb_printer_name: str):
+        """Set the PCB printer."""
+        if pcb_printer_name:
+            self.pcb_printer = ZebraZPL(pcb_printer_name, debug_mode=self.debug_mode)
+            logger.info(f"PCB printer set to: {pcb_printer_name}")
+        else:
+            self.pcb_printer = None
+            logger.info("PCB printer disabled")
+    
+    def enable_pcb_printing(self, enabled: bool):
+        """Enable or disable PCB printing."""
+        self.pcb_printing_enabled = enabled
+        logger.info(f"PCB printing {'enabled' if enabled else 'disabled'}")
+    
+    def get_pcb_stats(self) -> Dict[str, int]:
+        """Get PCB printing statistics."""
+        return self.pcb_stats.copy()
     
     def _log_stats(self):
         """Log current statistics."""
