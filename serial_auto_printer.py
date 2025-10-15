@@ -166,34 +166,32 @@ class DeviceDataParser:
     
     def _normalize_serial_number(self, serial_number: str) -> str:
         """
-        Normalize serial number to ensure ATS prefix.
+        Normalize serial number to just the numeric part (remove ATS prefix).
         
         Args:
             serial_number (str): Raw serial number from data
             
         Returns:
-            str: Normalized serial number with ATS prefix
+            str: Normalized serial number without ATS prefix
         """
         # Remove any extra spaces
         serial_number = serial_number.strip()
         
-        # If already starts with ATS, keep it as is
+        # If starts with ATS, remove it and keep just the numeric part
         if serial_number.upper().startswith('ATS'):
-            return serial_number.upper()
+            numeric_part = serial_number[3:].strip()  # Remove 'ATS' prefix
+            logger.info(f"Removed ATS prefix: {serial_number} → {numeric_part}")
+            return numeric_part
         
-        # If it's just numeric, add ATS prefix
+        # If it's just numeric, return as is
         if serial_number.isdigit():
-            normalized = f"ATS{serial_number}"
-            logger.info(f"Added ATS prefix: {serial_number} → {normalized}")
-            return normalized
+            return serial_number
         
-        # If it has other prefix, replace with ATS
-        # Extract just the numeric part and add ATS
+        # Extract just the numeric part from any format
         numeric_part = ''.join(filter(str.isdigit, serial_number))
         if numeric_part:
-            normalized = f"ATS{numeric_part}"
-            logger.info(f"Replaced prefix with ATS: {serial_number} → {normalized}")
-            return normalized
+            logger.info(f"Extracted numeric part: {serial_number} → {numeric_part}")
+            return numeric_part
         
         # Fallback: keep original if no numeric part found
         logger.warning(f"Could not normalize serial number: {serial_number}")

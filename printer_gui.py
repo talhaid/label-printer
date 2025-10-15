@@ -450,11 +450,11 @@ class AutoPrinterGUI:
         
         # Column widths
         self.data_tree.column("STC", width=60)
-        self.data_tree.column("Serial", width=120)
-        self.data_tree.column("IMEI", width=120)
-        self.data_tree.column("IMSI", width=120)
-        self.data_tree.column("CCID", width=120)
-        self.data_tree.column("MAC", width=100)
+        self.data_tree.column("Serial", width=150)  # Increased for full serial numbers
+        self.data_tree.column("IMEI", width=150)    # Increased for full IMEI
+        self.data_tree.column("IMSI", width=150)    # Increased for full IMSI  
+        self.data_tree.column("CCID", width=180)    # Increased for full CCID
+        self.data_tree.column("MAC", width=140)     # Increased for full MAC address
         self.data_tree.column("Status", width=80)
         self.data_tree.column("Time", width=80)
         

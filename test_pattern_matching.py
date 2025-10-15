@@ -18,10 +18,10 @@ def test_pattern_matching():
     
     # Test cases with different data formats
     test_cases = [
-        # Original working format
+        # Original working format (should now remove ATS prefix)
         "##ATS986063608048|867315088718139|286016570186236 |8990011418220012368F|24:5D:F9:7D:78:50##",
         
-        # Company side format (without ATS prefix)
+        # Company side format (numeric only)
         "##986063608048|867315088718139|286016570186236 |8990011418220012368F|24:5D:F9:7D:78:50##",
         
         # Format with extra spaces
