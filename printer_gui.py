@@ -44,7 +44,7 @@ class AutoPrinterGUI:
     def __init__(self, root):
         """Initialize the GUI."""
         self.root = root
-        self.root.title("Zebra GC420T Auto-Printer")
+        self.root.title("Zebra & XPrinter Auto-Printer")
         self.root.geometry("900x700")
         
         # Initialize clean folder structure first
@@ -76,24 +76,24 @@ class AutoPrinterGUI:
 ^MD15
 ~SD15
 
-^FO10,50^BQN,2,4
-^FDLA,STC:{STC};SN:{SERIAL_NUMBER};IMEI:{IMEI};IMSI:{IMSI};CCID:{CCID};MAC:{MAC_ADDRESS}^FS
+^FO0,20^BQN,2,4
+^FDLA,STC:{STC};SN:ATS{SERIAL_NUMBER};IMEI:{IMEI};IMSI:{IMSI};CCID:{CCID};MAC:{MAC_ADDRESS}^FS
 
 ^CF0,18,18
-^FO185,32.5^FDSTC:^FS
-^FO185,70^FDS/N:^FS
-^FO185,107.5^FDIMEI:^FS
-^FO185,145^FDIMSI:^FS
-^FO185,182.5^FDCCID:^FS
-^FO185,220^FDMAC:^FS
+^FO155,2.5^FDSTC:^FS
+^FO155,40^FDS/N:^FS
+^FO155,77.5^FDIMEI:^FS
+^FO155,115^FDIMSI:^FS
+^FO155,152.5^FDCCID:^FS
+^FO155,190^FDMAC:^FS
 
 ^CF0,22,16
-^FO225,32.5^FD{STC}^FS
-^FO225,70^FD{SERIAL_NUMBER}^FS
-^FO225,107.5^FD{IMEI}^FS
-^FO225,145^FD{IMSI}^FS
-^FO225,182.5^FD{CCID}^FS
-^FO225,220^FD{MAC_ADDRESS}^FS
+^FO195,2.5^FD{STC}^FS
+^FO195,40^FDATS{SERIAL_NUMBER}^FS
+^FO195,77.5^FD{IMEI}^FS
+^FO195,115^FD{IMSI}^FS
+^FO195,152.5^FD{CCID}^FS
+^FO195,190^FD{MAC_ADDRESS}^FS
 
 ^XZ"""
         
@@ -692,14 +692,11 @@ class AutoPrinterGUI:
                 messagebox.showwarning("Warning", "No latest data available. Please receive device data first.")
                 return
             
-            # Read the template
-            template_path = os.path.join("templates", "device_label_template.zpl")
-            if not os.path.exists(template_path):
-                messagebox.showerror("Error", f"Template file not found: {template_path}")
+            # Get template from the GUI text widget
+            template = self.template_text.get("1.0", "end-1c")
+            if not template.strip():
+                messagebox.showerror("Error", "Template is empty. Please enter a ZPL template in the ZPL Template tab.")
                 return
-                
-            with open(template_path, 'r', encoding='utf-8') as f:
-                template = f.read()
             
             # Prepare data for template substitution
             template_data = self.latest_device_data.copy()
@@ -803,10 +800,11 @@ class AutoPrinterGUI:
                     for field, entry in entries.items():
                         template_data[field] = entry.get().strip()
                     
-                    # Read template
-                    template_path = os.path.join("templates", "device_label_template.zpl")
-                    with open(template_path, 'r', encoding='utf-8') as f:
-                        template = f.read()
+                    # Get template from GUI instead of file
+                    template = self.template_text.get("1.0", "end-1c")
+                    if not template.strip():
+                        messagebox.showerror("Error", "Template is empty. Please enter a ZPL template in the ZPL Template tab.")
+                        return
                     
                     # Fill template
                     filled_template = template.format(**template_data)
@@ -1231,9 +1229,9 @@ class AutoPrinterGUI:
             printers = self.printer.list_printers()
             self.printer_combo['values'] = printers
             
-            # Auto-select Zebra printer if found
+            # Auto-select Zebra or XPrinter if found
             for printer in printers:
-                if any(x in printer.lower() for x in ['zebra', 'gc420', 'zdesigner']):
+                if any(x in printer.lower() for x in ['zebra', 'gc420', 'zdesigner', 'xprinter', 'xp-', 'xp58']):
                     self.printer_combo.set(printer)
                     break
             else:
@@ -2341,12 +2339,13 @@ class AutoPrinterGUI:
     
     def show_about(self):
         """Show about dialog."""
-        about_text = """Zebra GC420T Auto-Printer GUI
+        about_text = """Zebra & XPrinter Auto-Printer GUI
         
-Version: 2.0
-Date: August 2025
+Version: 2.1
+Date: December 2024
 
 Features:
+- Multi-printer support (Zebra GC420T & XPrinter)
 - Dual-mode operation (Auto-Print / Queue)
 - Real-time serial monitoring  
 - CSV data logging and viewing
