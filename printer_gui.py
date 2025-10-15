@@ -406,6 +406,26 @@ class AutoPrinterGUI:
         preview_frame = ttk.LabelFrame(status_frame, text="Live Data Preview")
         preview_frame.pack(fill="both", expand=True, padx=5, pady=5)
         
+        # Button frame for preview controls
+        preview_button_frame = ttk.Frame(preview_frame)
+        preview_button_frame.pack(fill="x", padx=5, pady=2)
+        
+        # Copy button for serial data
+        self.copy_data_btn = ttk.Button(
+            preview_button_frame, 
+            text="Copy Serial Data", 
+            command=self.copy_serial_data
+        )
+        self.copy_data_btn.pack(side="left", padx=5)
+        
+        # Clear button for preview
+        self.clear_preview_btn = ttk.Button(
+            preview_button_frame, 
+            text="Clear Preview", 
+            command=self.clear_serial_preview
+        )
+        self.clear_preview_btn.pack(side="left", padx=5)
+        
         self.data_text = scrolledtext.ScrolledText(preview_frame, height=8, font=("Consolas", 9))
         self.data_text.pack(fill="both", expand=True, padx=5, pady=5)
 
@@ -512,6 +532,14 @@ class AutoPrinterGUI:
         
         # Configure column weights
         table_frame.columnconfigure(1, weight=1)
+        
+        # Add copy button for latest data
+        copy_latest_btn = ttk.Button(
+            table_frame, 
+            text="Copy Latest Data", 
+            command=self.copy_latest_data
+        )
+        copy_latest_btn.grid(row=len(data_fields), column=0, columnspan=2, pady=5, sticky="w")
     
     def update_latest_data_display(self, device_data, stc):
         """Update the latest received data table."""
@@ -526,8 +554,78 @@ class AutoPrinterGUI:
             # Store the data
             self.latest_device_data = device_data.copy()
             self.latest_device_data['STC'] = str(stc)
+            
+            # Debug logging to see what data is being displayed
+            self.log_message(f"Updated latest data display: SN={device_data.get('SERIAL_NUMBER', '---')}, IMEI={device_data.get('IMEI', '---')}", "DEBUG")
         except Exception as e:
             print(f"Error updating latest data display: {e}")
+            self.log_message(f"Error updating latest data display: {e}", "ERROR")
+
+    def clear_latest_data_display(self):
+        """Clear the latest received data display."""
+        try:
+            self.latest_data_labels['stc_value'].config(text="---")
+            self.latest_data_labels['sn_value'].config(text="---")
+            self.latest_data_labels['imei_value'].config(text="---")
+            self.latest_data_labels['imsi_value'].config(text="---")
+            self.latest_data_labels['ccid_value'].config(text="---")
+            self.latest_data_labels['mac_value'].config(text="---")
+            self.latest_device_data = {}
+            self.log_message("Cleared latest data display", "DEBUG")
+        except Exception as e:
+            self.log_message(f"Error clearing latest data display: {e}", "ERROR")
+
+    def copy_serial_data(self):
+        """Copy all serial data preview to clipboard."""
+        try:
+            # Get all text from the data preview
+            serial_data = self.data_text.get("1.0", "end-1c")
+            if serial_data.strip():
+                # Copy to clipboard
+                self.root.clipboard_clear()
+                self.root.clipboard_append(serial_data)
+                self.root.update()  # Ensure clipboard is updated
+                self.log_message(f"Copied {len(serial_data)} characters to clipboard", "INFO")
+                messagebox.showinfo("Success", f"Serial data copied to clipboard!\n{len(serial_data)} characters copied")
+            else:
+                messagebox.showwarning("Warning", "No serial data to copy")
+        except Exception as e:
+            self.log_message(f"Error copying serial data: {e}", "ERROR")
+            messagebox.showerror("Error", f"Failed to copy data: {e}")
+
+    def clear_serial_preview(self):
+        """Clear the serial data preview."""
+        try:
+            self.data_text.delete("1.0", "end")
+            self.log_message("Cleared serial data preview", "INFO")
+        except Exception as e:
+            self.log_message(f"Error clearing serial preview: {e}", "ERROR")
+
+    def copy_latest_data(self):
+        """Copy the latest received data to clipboard."""
+        try:
+            latest_data_text = "Latest Received Device Data:\n"
+            latest_data_text += "=" * 40 + "\n"
+            latest_data_text += f"STC: {self.latest_data_labels['stc_value'].cget('text')}\n"
+            latest_data_text += f"Serial Number: {self.latest_data_labels['sn_value'].cget('text')}\n"
+            latest_data_text += f"IMEI: {self.latest_data_labels['imei_value'].cget('text')}\n"
+            latest_data_text += f"IMSI: {self.latest_data_labels['imsi_value'].cget('text')}\n"
+            latest_data_text += f"CCID: {self.latest_data_labels['ccid_value'].cget('text')}\n"
+            latest_data_text += f"MAC Address: {self.latest_data_labels['mac_value'].cget('text')}\n"
+            latest_data_text += "=" * 40 + "\n"
+            
+            if latest_data_text.strip():
+                # Copy to clipboard
+                self.root.clipboard_clear()
+                self.root.clipboard_append(latest_data_text)
+                self.root.update()  # Ensure clipboard is updated
+                self.log_message("Latest data copied to clipboard", "INFO")
+                messagebox.showinfo("Success", "Latest device data copied to clipboard!")
+            else:
+                messagebox.showwarning("Warning", "No latest data to copy")
+        except Exception as e:
+            self.log_message(f"Error copying latest data: {e}", "ERROR")
+            messagebox.showerror("Error", f"Failed to copy latest data: {e}")
 
     def setup_box_labels_tab(self, notebook):
         """Setup the box labels creation tab with editing capabilities."""
@@ -823,6 +921,7 @@ class AutoPrinterGUI:
         
         ttk.Button(log_controls, text="Clear Logs", command=self.clear_logs).pack(side="left", padx=5)
         ttk.Button(log_controls, text="Save Logs", command=self.save_logs).pack(side="left", padx=5)
+        ttk.Button(log_controls, text="Copy Logs", command=self.copy_logs).pack(side="left", padx=5)
         
         # Auto-scroll checkbox
         self.auto_scroll_var = tk.BooleanVar(value=True)
@@ -1006,6 +1105,8 @@ class AutoPrinterGUI:
                             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                             device_data['STC'] = stc_assigned
                             self.gui_queue.put(('add_to_table', (device_data, 'Queued', timestamp)))
+                            # Update latest data display for queue mode too
+                            self.gui_queue.put(('device_processed', (device_data, stc_assigned)))
                     else:
                         self.auto_printer.stats['parse_errors'] += 1
                 
@@ -1023,6 +1124,8 @@ class AutoPrinterGUI:
                 self.start_button.config(state="disabled")
                 self.stop_button.config(state="normal")
                 self.status_label.config(text="Status: Monitoring", foreground="green")
+                # Clear previous data display
+                self.clear_latest_data_display()
                 self.log_message(f"Started monitoring {port} at {baudrate} baud", "INFO")
             else:
                 messagebox.showerror("Error", "Failed to start monitoring")
@@ -1257,6 +1360,21 @@ class AutoPrinterGUI:
                 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save logs: {e}")
+
+    def copy_logs(self):
+        """Copy all logs to clipboard."""
+        try:
+            logs = self.log_text.get("1.0", "end-1c")
+            if logs.strip():
+                # Copy to clipboard
+                self.root.clipboard_clear()
+                self.root.clipboard_append(logs)
+                self.root.update()  # Ensure clipboard is updated
+                messagebox.showinfo("Success", f"Logs copied to clipboard!\n{len(logs)} characters copied")
+            else:
+                messagebox.showwarning("Warning", "No logs to copy")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to copy logs: {e}")
     
     def open_zpl_folder(self):
         """Open the ZPL outputs folder."""
