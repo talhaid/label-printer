@@ -539,7 +539,15 @@ class AutoPrinterGUI:
             text="Copy Latest Data", 
             command=self.copy_latest_data
         )
-        copy_latest_btn.grid(row=len(data_fields), column=0, columnspan=2, pady=5, sticky="w")
+        copy_latest_btn.grid(row=len(data_fields), column=0, pady=5, sticky="w")
+        
+        # Add copy buffer button for debugging packet reception
+        copy_buffer_btn = ttk.Button(
+            table_frame,
+            text="Copy Buffer",
+            command=self.copy_packet_buffer
+        )
+        copy_buffer_btn.grid(row=len(data_fields), column=1, pady=5, sticky="w")
     
     def update_latest_data_display(self, device_data, stc):
         """Update the latest received data table."""
@@ -626,6 +634,39 @@ class AutoPrinterGUI:
         except Exception as e:
             self.log_message(f"Error copying latest data: {e}", "ERROR")
             messagebox.showerror("Error", f"Failed to copy latest data: {e}")
+
+    def copy_packet_buffer(self):
+        """Copy the current packet buffer contents to clipboard for debugging."""
+        try:
+            if hasattr(self, 'auto_printer') and self.auto_printer and hasattr(self.auto_printer, 'parser'):
+                buffer_data = self.auto_printer.parser.get_buffered_data()
+                
+                buffer_text = "Packet Buffer Contents:\n"
+                buffer_text += "=" * 40 + "\n"
+                if buffer_data:
+                    buffer_text += f"Buffered Data: {repr(buffer_data)}\n"
+                    buffer_text += f"Buffer Length: {len(buffer_data)} characters\n"
+                    buffer_text += f"Contains ##: {'##' in buffer_data}\n"
+                    buffer_text += f"Contains |: {'|' in buffer_data}\n"
+                else:
+                    buffer_text += "Buffer is empty\n"
+                buffer_text += "=" * 40 + "\n"
+                
+                # Copy to clipboard
+                self.root.clipboard_clear()
+                self.root.clipboard_append(buffer_text)
+                self.root.update()  # Ensure clipboard is updated
+                self.log_message("Packet buffer copied to clipboard", "INFO")
+                
+                if buffer_data:
+                    messagebox.showinfo("Success", f"Packet buffer copied to clipboard!\nBuffer length: {len(buffer_data)} characters")
+                else:
+                    messagebox.showinfo("Info", "Packet buffer is empty (copied empty buffer info)")
+            else:
+                messagebox.showwarning("Warning", "Auto printer not initialized")
+        except Exception as e:
+            self.log_message(f"Error copying packet buffer: {e}", "ERROR")
+            messagebox.showerror("Error", f"Failed to copy packet buffer: {e}")
 
     def setup_box_labels_tab(self, notebook):
         """Setup the box labels creation tab with editing capabilities."""
@@ -1083,22 +1124,29 @@ class AutoPrinterGUI:
             def gui_callback(data):
                 self.gui_queue.put(('data', data))
                 
-                # Check current mode and handle accordingly
-                if self.auto_print_mode.get():
-                    # Auto-print mode: use original behavior and add to table
-                    result = self.auto_printer._handle_serial_data(data)
-                    if result:  # If device was successfully processed
-                        device_data, stc_assigned, pcb_success = result
-                        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        # Add to data table with STC and printed status
-                        device_data['STC'] = stc_assigned
-                        self.gui_queue.put(('add_to_table', (device_data, 'Printed', timestamp)))
-                        # Update latest data display
-                        self.gui_queue.put(('device_processed', (device_data, stc_assigned)))
-                else:
-                    # Queue mode: parse data and add to queue manually
-                    device_data = self.auto_printer.parser.parse_data(data)
-                    if device_data:
+                # Use streaming data processor to handle potentially incomplete packets
+                complete_packets = self.auto_printer.parser.process_streaming_data(data)
+                
+                # Process each complete packet
+                for device_data in complete_packets:
+                    if self.auto_print_mode.get():
+                        # Auto-print mode: process directly
+                        stc_assigned = self.auto_printer.add_device_to_queue(device_data, data)
+                        if stc_assigned:
+                            # Print the device immediately
+                            success = self.auto_printer.print_next_device()
+                            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            device_data['STC'] = stc_assigned
+                            status = 'Printed' if success else 'Print Failed'
+                            self.gui_queue.put(('add_to_table', (device_data, status, timestamp)))
+                            # Update latest data display
+                            self.gui_queue.put(('device_processed', (device_data, stc_assigned)))
+                            if success:
+                                self.auto_printer.stats['devices_processed'] += 1
+                            else:
+                                self.auto_printer.stats['print_errors'] += 1
+                    else:
+                        # Queue mode: add to queue for manual processing
                         self.auto_printer.stats['devices_processed'] += 1
                         stc_assigned = self.auto_printer.add_device_to_queue(device_data, data)
                         if stc_assigned:
@@ -1109,9 +1157,15 @@ class AutoPrinterGUI:
                             self.gui_queue.put(('device_processed', (device_data, stc_assigned)))
                             # Debug logging
                             self.log_message(f"Queue mode: Added device {device_data.get('SERIAL_NUMBER')} with STC {stc_assigned}", "DEBUG")
-                    else:
-                        self.auto_printer.stats['parse_errors'] += 1
-                        self.log_message(f"Queue mode: Failed to parse data: {data}", "ERROR")
+                        else:
+                            self.auto_printer.stats['parse_errors'] += 1
+                            self.log_message(f"Queue mode: Failed to assign STC for device", "ERROR")
+                
+                # If no complete packets were found, log the buffered data for debugging
+                if not complete_packets:
+                    buffered = self.auto_printer.parser.get_buffered_data()
+                    if buffered:
+                        self.log_message(f"Buffering incomplete data: {buffered}", "DEBUG")
                 
                 self.gui_queue.put(('stats', self.auto_printer.stats))
                 # Update STC display

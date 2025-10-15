@@ -59,19 +59,23 @@ class DeviceDataParser:
     """Parse device data from serial port using regex patterns."""
     
     def __init__(self):
-        # Primary pattern - complete 5 fields (handle extra spaces)
+        self.packet_buffer = ""  # Buffer for incomplete packets
+        
+        # Primary pattern - complete 5 fields (handle extra spaces anywhere)
         self.primary_pattern = re.compile(
-            r'##([A-Z0-9]+)\|([0-9]+)\|([0-9\s]+)\s*\|([0-9A-F]+)\|([A-F0-9:]+)##'
+            r'##([A-Z0-9]+)\|([0-9]+)\|([0-9\s]*?)\s*\|([0-9A-F]+)\|([A-F0-9:]+)##'
         )
         
-        # Flexible patterns for incomplete data (handle extra spaces)
+        # Flexible patterns for incomplete data (handle extra spaces anywhere)
         self.flexible_patterns = [
-            # 3 fields: SERIAL|IMEI|IMSI (like your previous incomplete data)
-            re.compile(r'##([A-Z0-9]+)\|([0-9]+)\|([0-9\s]+)(?:\s*\|?|##?)'),
-            # 4 fields: SERIAL|IMEI|IMSI|CCID
-            re.compile(r'##([A-Z0-9]+)\|([0-9]+)\|([0-9\s]+)\s*\|([0-9A-F]+)(?:\s*\|?|##?)'),
-            # Any pattern that starts with ##SERIAL|IMEI|IMSI
-            re.compile(r'##([A-Z0-9]+)\|([0-9]+)\|([0-9\s]+).*'),
+            # 3 fields: SERIAL|IMEI|IMSI (like your incomplete data with space)
+            re.compile(r'##([A-Z0-9]+)\|([0-9]+)\|([0-9\s]*?)(?:\s*\|?|##?)'),
+            # 4 fields: SERIAL|IMEI|IMSI|CCID (handle space after IMSI)
+            re.compile(r'##([A-Z0-9]+)\|([0-9]+)\|([0-9\s]*?)\s*\|([0-9A-F]+)(?:\s*\|?|##?)'),
+            # 5 fields but may have spaces: SERIAL|IMEI|IMSI|CCID|MAC
+            re.compile(r'##([A-Z0-9]+)\|([0-9]+)\|([0-9\s]*?)\s*\|([0-9A-F]+)\|([A-F0-9:]+)(?:##?)'),
+            # Any pattern that starts with ##SERIAL|IMEI|IMSI (very flexible)
+            re.compile(r'##([A-Z0-9]+)\|([0-9]+)\|([0-9\s]*?)(.*)'),
         ]
         
         # Backup patterns for different formats
@@ -173,6 +177,63 @@ class DeviceDataParser:
         
         logger.info(f"Parsed device data: {device_data}")
         return device_data
+    
+    def process_streaming_data(self, new_data: str) -> list:
+        """
+        Process streaming data that might come in chunks.
+        Buffers incomplete packets until complete ones are received.
+        
+        Args:
+            new_data (str): New data chunk from serial port
+            
+        Returns:
+            list: List of complete device data dictionaries
+        """
+        complete_packets = []
+        
+        # Add new data to buffer
+        self.packet_buffer += new_data
+        
+        # Look for complete packets (##...##)
+        while '##' in self.packet_buffer:
+            start_pos = self.packet_buffer.find('##')
+            if start_pos == -1:
+                break
+                
+            # Look for end marker after start
+            end_pos = self.packet_buffer.find('##', start_pos + 2)
+            if end_pos == -1:
+                # No complete packet yet, keep in buffer
+                break
+                
+            # Extract complete packet
+            packet = self.packet_buffer[start_pos:end_pos + 2]
+            logger.info(f"Found complete packet: {packet}")
+            
+            # Try to parse the complete packet
+            parsed_data = self.parse_data(packet)
+            if parsed_data:
+                complete_packets.append(parsed_data)
+            
+            # Remove processed packet from buffer
+            self.packet_buffer = self.packet_buffer[end_pos + 2:]
+        
+        # Keep buffer manageable (prevent memory issues)
+        if len(self.packet_buffer) > 1000:
+            logger.warning("Packet buffer too large, clearing old data")
+            # Keep only the last 200 characters
+            self.packet_buffer = self.packet_buffer[-200:]
+        
+        return complete_packets
+    
+    def get_buffered_data(self) -> str:
+        """Get current buffered data for debugging."""
+        return self.packet_buffer
+    
+    def clear_buffer(self):
+        """Clear the packet buffer."""
+        self.packet_buffer = ""
+        logger.info("Packet buffer cleared")
     
     def _log_failed_parsing_attempt(self, raw_data: str):
         """Log details about failed parsing attempts for debugging."""
