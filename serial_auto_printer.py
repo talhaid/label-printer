@@ -59,12 +59,22 @@ class DeviceDataParser:
     """Parse device data from serial port using regex patterns."""
     
     def __init__(self):
-        # Updated regex pattern to handle various data formats
-        # More flexible to handle: ##612165404520|866988074129817|286016570017900  |8990011419260179000F|B8:46:52:25:67:68##
-        # And original: ##ATS542912923728|866988074133496|286019876543210|8991101200003204510|AA:BB:CC:DD:EE:FF##
-        self.data_pattern = re.compile(
+        # Primary pattern - more flexible to handle various data formats
+        # Handles both: ##612165404520|866988074129817|286016570017900  |8990011419260179000F|B8:46:52:25:67:68##
+        # And: ##ATS542912923728|866988074133496|286019876543210|8991101200003204510|AA:BB:CC:DD:EE:FF##
+        self.primary_pattern = re.compile(
             r'##([A-Z0-9]+)\|([0-9]+)\|([0-9\s]+)\|([0-9A-F]+)\|([A-F0-9:]+)##'
         )
+        
+        # Backup patterns for different formats
+        self.backup_patterns = [
+            # Pattern without ## delimiters
+            re.compile(r'([A-Z0-9]+)\|([0-9]+)\|([0-9\s]+)\|([0-9A-F]+)\|([A-F0-9:]+)'),
+            # Pattern with different delimiters
+            re.compile(r'#([A-Z0-9]+)\|([0-9]+)\|([0-9\s]+)\|([0-9A-F]+)\|([A-F0-9:]+)#'),
+            # Pattern with comma separators
+            re.compile(r'##([A-Z0-9]+),([0-9]+),([0-9\s]+),([0-9A-F]+),([A-F0-9:]+)##'),
+        ]
         
         # Field mapping
         self.field_names = [
@@ -88,11 +98,25 @@ class DeviceDataParser:
         # Clean the data
         raw_data = raw_data.strip()
         
-        # Try to find the pattern
-        match = self.data_pattern.search(raw_data)
+        # Try primary pattern first
+        match = self.primary_pattern.search(raw_data)
+        pattern_used = "primary"
+        
+        # If no match, try backup patterns
+        if not match:
+            for i, pattern in enumerate(self.backup_patterns):
+                match = pattern.search(raw_data)
+                if match:
+                    pattern_used = f"backup_{i+1}"
+                    break
+        
         if not match:
             logger.warning(f"No valid data pattern found in: {raw_data}")
+            # Try to extract any data that looks like device info
+            self._log_failed_parsing_attempt(raw_data)
             return None
+        
+        logger.debug(f"Matched using {pattern_used} pattern")
         
         # Extract values
         values = match.groups()
@@ -118,6 +142,27 @@ class DeviceDataParser:
         
         logger.info(f"Parsed device data: {device_data}")
         return device_data
+    
+    def _log_failed_parsing_attempt(self, raw_data: str):
+        """Log details about failed parsing attempts for debugging."""
+        logger.debug(f"Failed parsing analysis for: '{raw_data}'")
+        logger.debug(f"Data length: {len(raw_data)}")
+        logger.debug(f"Contains ##: {'##' in raw_data}")
+        logger.debug(f"Contains |: {'|' in raw_data}")
+        logger.debug(f"Hex representation: {raw_data.encode('utf-8').hex()}")
+        
+        # Look for potential data segments
+        potential_segments = raw_data.split('|')
+        if len(potential_segments) >= 5:
+            logger.debug(f"Found {len(potential_segments)} pipe-separated segments")
+            for i, segment in enumerate(potential_segments[:5]):
+                logger.debug(f"Segment {i+1}: '{segment.strip()}'")
+        
+        # Check for other common separators
+        for sep in [',', ';', '\t', ' ']:
+            segments = raw_data.split(sep)
+            if len(segments) >= 5:
+                logger.debug(f"Alternative: {len(segments)} segments with '{sep}' separator")
     
     def _normalize_serial_number(self, serial_number: str) -> str:
         """
@@ -308,8 +353,10 @@ class SerialPortMonitor:
         logger.info("Serial port monitoring stopped")
     
     def _monitor_loop(self):
-        """Main monitoring loop."""
+        """Main monitoring loop with enhanced buffering and timeout handling."""
         buffer = ""
+        last_data_time = time.time()
+        timeout_threshold = 2.0  # Process incomplete data after 2 seconds
         
         while self.is_running:
             try:
@@ -318,17 +365,30 @@ class SerialPortMonitor:
                     data = self.serial_connection.read(self.serial_connection.in_waiting)
                     data_str = data.decode('utf-8', errors='ignore')
                     buffer += data_str
+                    last_data_time = time.time()
                     
-                    # Process complete lines
-                    while '\n' in buffer or '\r' in buffer:
-                        if '\n' in buffer:
-                            line, buffer = buffer.split('\n', 1)
-                        else:
-                            line, buffer = buffer.split('\r', 1)
-                        
+                    logger.debug(f"Received data: {repr(data_str)}")
+                
+                # Process complete lines (handle various line endings)
+                lines_processed = False
+                for line_ending in ['\n', '\r\n', '\r']:
+                    while line_ending in buffer:
+                        line, buffer = buffer.split(line_ending, 1)
                         line = line.strip()
                         if line and self.data_callback:
+                            logger.debug(f"Processing line: {repr(line)}")
                             self.data_callback(line)
+                        lines_processed = True
+                
+                # Handle timeout - process incomplete data if no new data for a while
+                current_time = time.time()
+                if not lines_processed and buffer and (current_time - last_data_time) > timeout_threshold:
+                    line = buffer.strip()
+                    if line and self.data_callback:
+                        logger.debug(f"Processing timeout data: {repr(line)}")
+                        self.data_callback(line)
+                    buffer = ""
+                    last_data_time = current_time
                 
                 time.sleep(0.1)  # Small delay to prevent excessive CPU usage
                 
@@ -357,7 +417,7 @@ class DeviceAutoPrinter:
     
     def __init__(self, zpl_template: str, serial_port: str = None, 
                  baudrate: int = 9600, printer_name: str = None, initial_stc: int = 60000,
-                 zpl_output_dir: str = None, csv_file_path: str = None):
+                 zpl_output_dir: str = None, csv_file_path: str = None, debug_mode: bool = False):
         """
         Initialize the auto-printer system.
         
@@ -369,10 +429,12 @@ class DeviceAutoPrinter:
             initial_stc (int): Starting STC value (default: 60000)
             zpl_output_dir (str): Custom ZPL output directory
             csv_file_path (str): Custom CSV file path
+            debug_mode (bool): Enable debug mode (simulates printing without physical printer)
         """
+        self.debug_mode = debug_mode
         self.parser = DeviceDataParser()
         self.template = ZPLTemplate(zpl_template)
-        self.printer = ZebraZPL(printer_name)
+        self.printer = ZebraZPL(printer_name, debug_mode=debug_mode)
         self.serial_monitor = SerialPortMonitor(serial_port, baudrate) if serial_port else None
         
         # Initialize file paths first

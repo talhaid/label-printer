@@ -408,13 +408,75 @@ class AutoPrinterGUI:
         
         self.data_text = scrolledtext.ScrolledText(preview_frame, height=8, font=("Consolas", 9))
         self.data_text.pack(fill="both", expand=True, padx=5, pady=5)
+
+        # Device Data Table with Queue Controls
+        device_data_frame = ttk.LabelFrame(scrollable_frame, text="Device Data / Queue")
+        device_data_frame.pack(fill="both", expand=True, padx=5, pady=5)
+        
+        # Queue control buttons frame
+        queue_controls_frame = ttk.Frame(device_data_frame)
+        queue_controls_frame.pack(fill="x", padx=5, pady=5)
+        
+        # Queue control buttons (initially hidden, shown in queue mode)
+        self.print_selected_btn = ttk.Button(queue_controls_frame, text="Print Selected", command=self.print_selected_device)
+        self.print_selected_btn.pack(side="left", padx=5)
+        
+        self.print_all_btn = ttk.Button(queue_controls_frame, text="Print All Queue", command=self.print_all_devices)
+        self.print_all_btn.pack(side="left", padx=5)
+        
+        self.remove_selected_btn = ttk.Button(queue_controls_frame, text="Remove Selected", command=self.remove_selected_device)
+        self.remove_selected_btn.pack(side="left", padx=5)
+        
+        self.clear_queue_btn = ttk.Button(queue_controls_frame, text="Clear Queue", command=self.clear_device_queue)
+        self.clear_queue_btn.pack(side="left", padx=5)
+        
+        # Device data table
+        table_frame = ttk.Frame(device_data_frame)
+        table_frame.pack(fill="both", expand=True, padx=5, pady=5)
+        
+        # Create treeview for device data
+        columns = ("STC", "Serial", "IMEI", "IMSI", "CCID", "MAC", "Status", "Time")
+        self.data_tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=8)
+        
+        # Configure columns
+        self.data_tree.heading("STC", text="STC")
+        self.data_tree.heading("Serial", text="Serial Number")
+        self.data_tree.heading("IMEI", text="IMEI")
+        self.data_tree.heading("IMSI", text="IMSI") 
+        self.data_tree.heading("CCID", text="CCID")
+        self.data_tree.heading("MAC", text="MAC Address")
+        self.data_tree.heading("Status", text="Status")
+        self.data_tree.heading("Time", text="Time")
+        
+        # Column widths
+        self.data_tree.column("STC", width=60)
+        self.data_tree.column("Serial", width=120)
+        self.data_tree.column("IMEI", width=120)
+        self.data_tree.column("IMSI", width=120)
+        self.data_tree.column("CCID", width=120)
+        self.data_tree.column("MAC", width=100)
+        self.data_tree.column("Status", width=80)
+        self.data_tree.column("Time", width=80)
+        
+        # Add scrollbar
+        data_scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.data_tree.yview)
+        self.data_tree.configure(yscrollcommand=data_scrollbar.set)
+        
+        self.data_tree.pack(side="left", fill="both", expand=True)
+        data_scrollbar.pack(side="right", fill="y")
+        
+        # For backward compatibility with queue methods
+        self.queue_tree = self.data_tree
+        
+        # Initially hide queue controls (show in queue mode)
+        self.queue_controls_frame = queue_controls_frame
         
         # Test data input
         test_frame = ttk.LabelFrame(scrollable_frame, text="Test Data Input")
         test_frame.pack(fill="x", padx=5, pady=5)
         
         self.test_data_entry = ttk.Entry(test_frame, width=70)
-        self.test_data_entry.insert(0, "##ATS542912923728|866988074133496|286019876543210|8991101200003204510|AA:BB:CC:DD:EE:FF##")
+        self.test_data_entry.insert(0, "##TEST123456789|999888777666555|111222333444555|TEST1234567890ABCDEF|FF:EE:DD:CC:BB:AA##")
         self.test_data_entry.pack(side="left", padx=5, pady=5)
         
         ttk.Button(test_frame, text="Test Parse & Print", command=self.test_data_processing).pack(side="left", padx=5, pady=5)

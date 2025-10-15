@@ -46,24 +46,31 @@ class ZebraZPL:
     with text, barcodes, graphics, and precise formatting.
     """
     
-    def __init__(self, printer_name: str = None):
+    def __init__(self, printer_name: str = None, debug_mode: bool = False):
         """
         Initialize the Zebra ZPL interface.
         
         Args:
             printer_name (str): Name of the printer as it appears in Windows.
                               If None, will attempt to find Zebra printer automatically.
+            debug_mode (bool): If True, simulates printing without sending to actual printer.
         """
         self.printer_name = printer_name
         self.available_printers = []
         self.printer_handle = None
+        self.debug_mode = debug_mode
+        self.last_print_data = None  # Store last print data for debugging
         
         # Default settings for GC420T
         self.dpi = 203  # GC420T resolution
         self.label_width = 832  # pixels at 203 DPI (4 inches)
         self.label_height = 609  # pixels at 203 DPI (3 inches)
         
-        if WIN32_AVAILABLE:
+        if self.debug_mode:
+            logger.info("🔧 DEBUG MODE: ZPL printer initialized in debug mode (no actual printing)")
+            self.printer_name = "DEBUG_PRINTER"
+            self.available_printers = ["DEBUG_PRINTER", "Simulated Zebra GC420T"]
+        elif WIN32_AVAILABLE:
             self._discover_printers()
             if not self.printer_name:
                 self.printer_name = self._find_zebra_printer()
@@ -129,6 +136,22 @@ class ZebraZPL:
         if not self.printer_name:
             logger.error("No printer specified")
             return False
+        
+        # Debug mode - simulate printing
+        if self.debug_mode:
+            self.last_print_data = zpl_commands
+            logger.info("🖨️ DEBUG MODE: Simulating ZPL print job")
+            logger.info(f"📄 ZPL Commands ({len(zpl_commands)} chars):")
+            
+            # Show a preview of the ZPL commands
+            lines = zpl_commands.strip().split('\n')
+            for i, line in enumerate(lines[:10]):  # Show first 10 lines
+                logger.info(f"   {i+1:2d}: {line}")
+            if len(lines) > 10:
+                logger.info(f"   ... ({len(lines)-10} more lines)")
+            
+            logger.info("✅ DEBUG MODE: Print job simulated successfully")
+            return True
         
         if not WIN32_AVAILABLE:
             logger.error("win32print not available")
