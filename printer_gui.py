@@ -1107,8 +1107,11 @@ class AutoPrinterGUI:
                             self.gui_queue.put(('add_to_table', (device_data, 'Queued', timestamp)))
                             # Update latest data display for queue mode too
                             self.gui_queue.put(('device_processed', (device_data, stc_assigned)))
+                            # Debug logging
+                            self.log_message(f"Queue mode: Added device {device_data.get('SERIAL_NUMBER')} with STC {stc_assigned}", "DEBUG")
                     else:
                         self.auto_printer.stats['parse_errors'] += 1
+                        self.log_message(f"Queue mode: Failed to parse data: {data}", "ERROR")
                 
                 self.gui_queue.put(('stats', self.auto_printer.stats))
                 # Update STC display
@@ -1803,6 +1806,7 @@ class AutoPrinterGUI:
                 elif msg_type == 'device_processed':
                     # Update latest received data display
                     device_data, stc = data
+                    self.log_message(f"Processing device_processed message: SN={device_data.get('SERIAL_NUMBER')}, STC={stc}", "DEBUG")
                     self.update_latest_data_display(device_data, stc)
                 
                 elif msg_type == 'add_to_table':

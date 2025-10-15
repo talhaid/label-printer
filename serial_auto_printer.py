@@ -59,12 +59,20 @@ class DeviceDataParser:
     """Parse device data from serial port using regex patterns."""
     
     def __init__(self):
-        # Primary pattern - more flexible to handle various data formats
-        # Handles both: ##612165404520|866988074129817|286016570017900  |8990011419260179000F|B8:46:52:25:67:68##
-        # And: ##ATS542912923728|866988074133496|286019876543210|8991101200003204510|AA:BB:CC:DD:EE:FF##
+        # Primary pattern - complete 5 fields (handle extra spaces)
         self.primary_pattern = re.compile(
-            r'##([A-Z0-9]+)\|([0-9]+)\|([0-9\s]+)\|([0-9A-F]+)\|([A-F0-9:]+)##'
+            r'##([A-Z0-9]+)\|([0-9]+)\|([0-9\s]+)\s*\|([0-9A-F]+)\|([A-F0-9:]+)##'
         )
+        
+        # Flexible patterns for incomplete data (handle extra spaces)
+        self.flexible_patterns = [
+            # 3 fields: SERIAL|IMEI|IMSI (like your previous incomplete data)
+            re.compile(r'##([A-Z0-9]+)\|([0-9]+)\|([0-9\s]+)(?:\s*\|?|##?)'),
+            # 4 fields: SERIAL|IMEI|IMSI|CCID
+            re.compile(r'##([A-Z0-9]+)\|([0-9]+)\|([0-9\s]+)\s*\|([0-9A-F]+)(?:\s*\|?|##?)'),
+            # Any pattern that starts with ##SERIAL|IMEI|IMSI
+            re.compile(r'##([A-Z0-9]+)\|([0-9]+)\|([0-9\s]+).*'),
+        ]
         
         # Backup patterns for different formats
         self.backup_patterns = [
@@ -98,16 +106,27 @@ class DeviceDataParser:
         # Clean the data
         raw_data = raw_data.strip()
         
-        # Try primary pattern first
+        # Try primary pattern first (complete 5 fields)
         match = self.primary_pattern.search(raw_data)
         pattern_used = "primary"
+        fields_found = 5
         
-        # If no match, try backup patterns
+        # If no match with complete data, try flexible patterns
+        if not match:
+            for i, pattern in enumerate(self.flexible_patterns):
+                match = pattern.search(raw_data)
+                if match:
+                    pattern_used = f"flexible_{i+1}"
+                    fields_found = len(match.groups())
+                    break
+        
+        # If still no match, try backup patterns
         if not match:
             for i, pattern in enumerate(self.backup_patterns):
                 match = pattern.search(raw_data)
                 if match:
                     pattern_used = f"backup_{i+1}"
+                    fields_found = len(match.groups())
                     break
         
         if not match:
@@ -116,25 +135,37 @@ class DeviceDataParser:
             self._log_failed_parsing_attempt(raw_data)
             return None
         
-        logger.debug(f"Matched using {pattern_used} pattern")
+        logger.info(f"Matched using {pattern_used} pattern, found {fields_found} fields")
         
         # Extract values
-        values = match.groups()
-        if len(values) != len(self.field_names):
-            logger.error(f"Expected {len(self.field_names)} fields, got {len(values)}")
-            return None
+        values = list(match.groups())
+        
+        # Handle incomplete data by filling missing fields
+        while len(values) < len(self.field_names):
+            if len(values) == 3:  # Missing CCID and MAC (like your current data)
+                values.append("UNKNOWN_CCID")
+                values.append("00:00:00:00:00:00")
+            elif len(values) == 4:  # Missing MAC only
+                values.append("00:00:00:00:00:00")
+            else:
+                values.append("UNKNOWN")
+        
+        logger.info(f"Final values after padding: {values}")
         
         # Create device data dictionary
         device_data = {}
         for i, field_name in enumerate(self.field_names):
-            # Clean the value (remove extra spaces)
-            clean_value = values[i].strip()
-            
-            # Special handling for SERIAL_NUMBER - ensure ATS prefix
-            if field_name == 'SERIAL_NUMBER':
-                clean_value = self._normalize_serial_number(clean_value)
-            
-            device_data[field_name] = clean_value
+            if i < len(values):
+                # Clean the value (remove extra spaces)
+                clean_value = values[i].strip()
+                
+                # Special handling for SERIAL_NUMBER - remove ATS prefix
+                if field_name == 'SERIAL_NUMBER':
+                    clean_value = self._normalize_serial_number(clean_value)
+                
+                device_data[field_name] = clean_value
+            else:
+                device_data[field_name] = "UNKNOWN"
         
         # Add timestamp (STC will be assigned later during printing)
         device_data['TIMESTAMP'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
