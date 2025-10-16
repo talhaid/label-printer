@@ -993,8 +993,8 @@ class DeviceAutoPrinter:
         serial_number = device_data.get('SERIAL_NUMBER', 'UNKNOWN')
         stc = device_data.get('STC', 'UNKNOWN')
         
-        # TSPL commands for 40mm x 20mm label - EXTRA LARGE FONTS WITH SCALING
-        # Using font scaling to make text even bigger than Font "5"
+        # TSPL commands for 40mm x 20mm label - FIXED CHARACTER ENCODING
+        # Removed scaling to prevent character corruption
         tspl_commands = f"""SIZE 40 mm, 20 mm
 GAP 0 mm, 0 mm
 DIRECTION 1
@@ -1005,8 +1005,8 @@ SET CUTTER OFF
 SET PARTIAL_CUTTER OFF
 SET TEAR ON
 CLEAR
-TEXT 70, 40, "5", 0, 2, 2, "{serial_number}"
-TEXT 80, 90, "5", 0, 2, 2, "STC: {stc}"
+TEXT 50, 30, "4", 0, 1, 1, "{serial_number}"
+TEXT 50, 80, "3", 0, 1, 1, "STC:{stc}"
 PRINT 1, 1
 """
         
