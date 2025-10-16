@@ -979,22 +979,20 @@ class DeviceAutoPrinter:
     
     def _create_pcb_label_data(self, device_data: Dict[str, str]) -> str:
         """
-        Create PCB label data for XPrinter PCB printing.
-        40mm x 20mm label size (315 x 157 dots at 203 DPI)
+        Create simple PCB label data for XPrinter PCB printing.
+        Just Serial Number and STC - simple and clean.
         
         Args:
             device_data (Dict[str, str]): Device data dictionary
             
         Returns:
-            str: ZPL commands optimized for 40mm x 20mm labels with centered text
+            str: Simple ZPL commands for PCB label with just Serial + STC
         """
-        # Extract essential data
+        # Extract essential data for PCB
         serial_number = device_data.get('SERIAL_NUMBER', 'UNKNOWN')
         stc = device_data.get('STC', 'UNKNOWN')
         
-        # 40mm x 20mm PCB label template for XPrinter - CENTERED TEXT
-        # PW315 = 40mm width, LL157 = 20mm height
-        # Using ^FB for text centering within the label width
+        # Simple PCB label - just Serial Number and STC, centered
         pcb_zpl = f"""^XA
 ^MMT
 ^PW315
@@ -1101,25 +1099,24 @@ DEFAULT_ZPL_TEMPLATE = """^XA
 ^MD15
 ~SD15
 
-^FO0,25^BQN,2,4
-^FDLA,STC NO:{STC};SN:{SERIAL_NUMBER};IMEI:{IMEI};IMSI:{IMSI};CCID:{CCID};MAC:{MAC_ADDRESS}^FS
-
+^FO20,50^BQN,2,4
+^FDLA,STC:{STC};SN:ATS{SERIAL_NUMBER};IMEI:{IMEI};IMSI:{IMSI};CCID:{CCID};MAC:{MAC_ADDRESS}^FS
 
 ^CF0,18,18
-^FO155,2.5^FDSTC NO:^FS
-^FO155,40^FDS/N:^FS
-^FO155,77.5^FDIMEI:^FS
-^FO155,115^FDIMSI:^FS
-^FO155,152.5^FDCCID:^FS
-^FO155,190^FDMAC:^FS
+^FO185,32.5^FDSTC:^FS
+^FO185,70^FDS/N:^FS
+^FO185,107.5^FDIMEI:^FS
+^FO185,145^FDIMSI:^FS
+^FO185,182.5^FDCCID:^FS
+^FO185,220^FDMAC:^FS
 
 ^CF0,22,16
-^FO220,2.5^FD{STC}^FS
-^FO200,40^FD{SERIAL_NUMBER}^FS
-^FO200,77.5^FD{IMEI}^FS
-^FO200,115^FD{IMSI}^FS
-^FO200,152.5^FD{CCID}^FS
-^FO200,190^FD{MAC_ADDRESS}^FS
+^FO225,32.5^FD{STC}^FS
+^FO225,70^FD{SERIAL_NUMBER}^FS
+^FO225,107.5^FD{IMEI}^FS
+^FO225,145^FD{IMSI}^FS
+^FO225,182.5^FD{CCID}^FS
+^FO225,220^FD{MAC_ADDRESS}^FS
 
 ^XZ
 """
