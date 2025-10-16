@@ -993,9 +993,9 @@ class DeviceAutoPrinter:
         serial_number = device_data.get('SERIAL_NUMBER', 'UNKNOWN')
         stc = device_data.get('STC', 'UNKNOWN')
         
-        # SMALL & CENTERED TSPL - Font 3 for serial, Font 2 for STC
+        # SIMPLE LAYOUT - Font 2 for both serial and STC
         tspl_commands = f"""SIZE 40 mm, 20 mm
-GAP 0 mm, 0 mm
+GAP 2 mm, 0 mm
 DIRECTION 1
 REFERENCE 0, 0
 OFFSET 0 mm
@@ -1004,7 +1004,7 @@ SET CUTTER OFF
 SET PARTIAL_CUTTER OFF
 SET TEAR ON
 CLEAR
-TEXT 100, 40, "3", 0, 1, 1, "{serial_number}"
+TEXT 100, 40, "2", 0, 1, 1, "{serial_number}"
 TEXT 120, 80, "2", 0, 1, 1, "STC:{stc}"
 PRINT 1, 1
 """
