@@ -1087,14 +1087,7 @@ PRINT 1, 1
                        f"Success Rate: {self.stats['successful_prints']}/{self.stats['devices_processed']} "
                        f"({100 * self.stats['successful_prints'] / max(1, self.stats['devices_processed']):.1f}%)")
 
-    def enable_pcb_printing(self, enabled: bool = True):
-        """Enable or disable PCB printing."""
-        self.pcb_printing_enabled = enabled
-        logger.info(f"PCB printing {'enabled' if enabled else 'disabled'}")
-    
-    def get_pcb_stats(self):
-        """Get PCB printing statistics."""
-        return {'pcb_prints_attempted': 0, 'pcb_prints_successful': 0, 'pcb_prints_failed': 0}
+
 
 
 # Your specific ZPL template with placeholders
