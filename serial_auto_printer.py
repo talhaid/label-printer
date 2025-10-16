@@ -936,11 +936,12 @@ class DeviceAutoPrinter:
             pcb_success = False
             if self.pcb_printing_enabled and self.pcb_printer:
                 try:
-                    # Create PCB label data
+                    # Create PCB label data using TSPL
                     pcb_data = self._create_pcb_label_data(device_data)
-                    logger.info(f"PCB ZPL data created: {pcb_data}")
+                    logger.info(f"PCB TSPL data created: {pcb_data}")
                     
-                    pcb_success = self.pcb_printer.send_zpl(pcb_data)
+                    # Use TSPL for XPrinter instead of ZPL
+                    pcb_success = self.pcb_printer.send_tspl(pcb_data)
                     
                     self.pcb_stats['pcb_prints_attempted'] += 1
                     if pcb_success:
@@ -979,33 +980,37 @@ class DeviceAutoPrinter:
     
     def _create_pcb_label_data(self, device_data: Dict[str, str]) -> str:
         """
-        Create PCB label data for XPrinter PCB printing.
-        40mm x 20mm label size (315 x 157 dots at 203 DPI)
+        Create PCB label data using TSPL commands for XPrinter XP-470B.
+        40mm x 20mm label size using TSPL (TSC Printer Language)
         
         Args:
             device_data (Dict[str, str]): Device data dictionary
             
         Returns:
-            str: ZPL commands optimized for 40mm x 20mm labels
+            str: TSPL commands optimized for XPrinter XP-470B
         """
         # Extract essential data
         serial_number = device_data.get('SERIAL_NUMBER', 'UNKNOWN')
         stc = device_data.get('STC', 'UNKNOWN')
         
-        # 40mm x 20mm PCB label template for XPrinter
-        # PW315 = 40mm width, LL157 = 20mm height
-        pcb_zpl = f"""^XA
-^MMT
-^PW315
-^LL157
-^LS0
-^CF0,20
-^FO5,10^FD{serial_number}^FS
-^CF0,15
-^FO5,40^FDSTC: {stc}^FS
-^XZ"""
+        # TSPL commands for 40mm x 20mm label - EXTRA LARGE FONTS WITH SCALING
+        # Using font scaling to make text even bigger than Font "5"
+        tspl_commands = f"""SIZE 40 mm, 20 mm
+GAP 0 mm, 0 mm
+DIRECTION 1
+REFERENCE 0, 0
+OFFSET 0 mm
+SET PEEL OFF
+SET CUTTER OFF
+SET PARTIAL_CUTTER OFF
+SET TEAR ON
+CLEAR
+TEXT 70, 40, "5", 0, 2, 2, "{serial_number}"
+TEXT 80, 90, "5", 0, 2, 2, "STC: {stc}"
+PRINT 1, 1
+"""
         
-        return pcb_zpl
+        return tspl_commands
     
     def print_device_label(self, device_data: Dict[str, str]) -> bool:
         """

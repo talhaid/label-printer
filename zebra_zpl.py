@@ -179,7 +179,66 @@ class ZebraZPL:
             return True
             
         except Exception as e:
-            logger.error(f"Failed to send ZPL commands: {str(e)}")
+            logger.error(f"Error sending ZPL commands: {e}")
+            return False
+    
+    def send_tspl(self, tspl_commands: str) -> bool:
+        """
+        Send TSPL commands to the printer (for XPrinter and TSC printers).
+        
+        Args:
+            tspl_commands (str): TSPL command string
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        if not self.printer_name:
+            logger.error("No printer specified")
+            return False
+        
+        # Debug mode - simulate printing
+        if self.debug_mode:
+            self.last_print_data = tspl_commands
+            logger.info("🖨️ DEBUG MODE: Simulating TSPL print job")
+            logger.info(f"📄 TSPL Commands ({len(tspl_commands)} chars):")
+            
+            # Show a preview of the TSPL commands
+            lines = tspl_commands.strip().split('\n')
+            for i, line in enumerate(lines[:15]):  # Show first 15 lines
+                logger.info(f"   {i+1:2d}: {line}")
+            if len(lines) > 15:
+                logger.info(f"   ... ({len(lines)-15} more lines)")
+            
+            logger.info("✅ DEBUG MODE: TSPL print job simulated successfully")
+            return True
+        
+        if not WIN32_AVAILABLE:
+            logger.error("win32print not available")
+            return False
+        
+        try:
+            hprinter = win32print.OpenPrinter(self.printer_name)
+            
+            try:
+                job_info = ("TSPL Print Job", None, "RAW")
+                job_id = win32print.StartDocPrinter(hprinter, 1, job_info)
+                
+                try:
+                    win32print.StartPagePrinter(hprinter)
+                    win32print.WritePrinter(hprinter, tspl_commands.encode('utf-8'))
+                    win32print.EndPagePrinter(hprinter)
+                    
+                finally:
+                    win32print.EndDocPrinter(hprinter)
+                    
+            finally:
+                win32print.ClosePrinter(hprinter)
+            
+            logger.info("Successfully sent TSPL commands to printer")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error sending TSPL commands: {e}")
             return False
     
     def create_text_label(self, title: str, text_lines: List[str], 
