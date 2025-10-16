@@ -981,7 +981,7 @@ class DeviceAutoPrinter:
     def _create_pcb_label_data(self, device_data: Dict[str, str]) -> str:
         """
         Create PCB label data using TSPL commands for XPrinter XP-470B.
-        40mm x 20mm label size using TSPL (TSC Printer Language)
+        40mm x 20mm label size - SMALL & CENTERED layout
         
         Args:
             device_data (Dict[str, str]): Device data dictionary
@@ -993,8 +993,7 @@ class DeviceAutoPrinter:
         serial_number = device_data.get('SERIAL_NUMBER', 'UNKNOWN')
         stc = device_data.get('STC', 'UNKNOWN')
         
-        # TSPL commands for 40mm x 20mm label - FIXED CHARACTER ENCODING
-        # Removed scaling to prevent character corruption
+        # SMALL & CENTERED TSPL - Font 3 for serial, Font 2 for STC
         tspl_commands = f"""SIZE 40 mm, 20 mm
 GAP 0 mm, 0 mm
 DIRECTION 1
@@ -1005,8 +1004,8 @@ SET CUTTER OFF
 SET PARTIAL_CUTTER OFF
 SET TEAR ON
 CLEAR
-TEXT 50, 30, "4", 0, 1, 1, "{serial_number}"
-TEXT 50, 80, "3", 0, 1, 1, "STC:{stc}"
+TEXT 100, 40, "3", 0, 1, 1, "{serial_number}"
+TEXT 120, 80, "2", 0, 1, 1, "STC:{stc}"
 PRINT 1, 1
 """
         
