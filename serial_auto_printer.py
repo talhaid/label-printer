@@ -986,23 +986,24 @@ class DeviceAutoPrinter:
             device_data (Dict[str, str]): Device data dictionary
             
         Returns:
-            str: ZPL commands optimized for 40mm x 20mm labels
+            str: ZPL commands optimized for 40mm x 20mm labels with centered text
         """
         # Extract essential data
         serial_number = device_data.get('SERIAL_NUMBER', 'UNKNOWN')
         stc = device_data.get('STC', 'UNKNOWN')
         
-        # 40mm x 20mm PCB label template for XPrinter
+        # 40mm x 20mm PCB label template for XPrinter - CENTERED TEXT
         # PW315 = 40mm width, LL157 = 20mm height
+        # Using ^FB for text centering within the label width
         pcb_zpl = f"""^XA
 ^MMT
 ^PW315
 ^LL157
 ^LS0
-^CF0,20
-^FO5,10^FD{serial_number}^FS
-^CF0,15
-^FO5,40^FDSTC: {stc}^FS
+^CF0,22
+^FB315,1,0,C^FO0,35^FD{serial_number}^FS
+^CF0,22
+^FB315,1,0,C^FO0,75^FDSTC: {stc}^FS
 ^XZ"""
         
         return pcb_zpl
