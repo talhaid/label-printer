@@ -1350,6 +1350,7 @@ class AutoPrinterGUI:
             # Override the data callback to handle GUI mode switching
             def gui_callback(data):
                 self.gui_queue.put(('data', data))
+                self.log_message(f"Received raw data: {repr(data)}", "DEBUG")
                 
                 # Use streaming data processor to handle potentially incomplete packets
                 complete_packets = self.auto_printer.parser.process_streaming_data(data)
@@ -1357,42 +1358,46 @@ class AutoPrinterGUI:
                 # Process each complete packet
                 for device_data in complete_packets:
                     if self.auto_print_mode.get():
-                        # Auto-print mode: process directly
-                        stc_assigned = self.auto_printer.add_device_to_queue(device_data, data)
-                        if stc_assigned:
-                            # Print the device immediately
-                            success = self.auto_printer.print_next_device()
-                            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                            device_data['STC'] = stc_assigned
-                            status = 'Printed' if success else 'Print Failed'
-                            self.gui_queue.put(('add_to_table', (device_data, status, timestamp)))
-                            # Update latest data display
-                            self.gui_queue.put(('device_processed', (device_data, stc_assigned)))
-                            if success:
-                                self.auto_printer.stats['devices_processed'] += 1
-                            else:
-                                self.auto_printer.stats['print_errors'] += 1
-                    else:
-                        # Queue mode: add to queue for manual processing
-                        self.auto_printer.stats['devices_processed'] += 1
-                        stc_assigned = self.auto_printer.add_device_to_queue(device_data, data)
-                        if stc_assigned:
-                            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                            device_data['STC'] = stc_assigned
-                            self.gui_queue.put(('add_to_table', (device_data, 'Queued', timestamp)))
-                            # Update latest data display for queue mode too
-                            self.gui_queue.put(('device_processed', (device_data, stc_assigned)))
-                            # Debug logging
-                            self.log_message(f"Queue mode: Added device {device_data.get('SERIAL_NUMBER')} with STC {stc_assigned}", "DEBUG")
+                        # Auto-print mode: process directly (skip queue, print immediately)
+                        success, zpl_filename, stc_assigned, pcb_success = self.auto_printer.print_device_label_with_save(device_data, data)
+                        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        device_data['STC'] = str(stc_assigned)
+                        status = 'Printed' if success else 'Print Failed'
+                        self.gui_queue.put(('add_to_table', (device_data, status, timestamp)))
+                        # Update latest data display
+                        self.gui_queue.put(('device_processed', (device_data, stc_assigned)))
+                        
+                        # Log success/failure
+                        self.log_message(f"Auto-print: {status} for device {device_data.get('SERIAL_NUMBER')} with STC {stc_assigned}", "INFO")
+                        
+                        # Update statistics
+                        if success:
+                            self.auto_printer.stats['successful_prints'] += 1
                         else:
-                            self.auto_printer.stats['parse_errors'] += 1
-                            self.log_message(f"Queue mode: Failed to assign STC for device", "ERROR")
+                            self.auto_printer.stats['failed_prints'] += 1
+                        self.auto_printer.stats['devices_processed'] += 1
+                    else:
+                        # Queue mode: add to queue for manual processing  
+                        stc_assigned = self.auto_printer.add_device_to_queue(device_data, data)
+                        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        device_data['STC'] = str(stc_assigned)
+                        self.gui_queue.put(('add_to_table', (device_data, 'Queued', timestamp)))
+                        # Update latest data display for queue mode too
+                        self.gui_queue.put(('device_processed', (device_data, stc_assigned)))
+                        # Debug logging
+                        self.log_message(f"Queue mode: Added device {device_data.get('SERIAL_NUMBER')} with STC {stc_assigned}", "DEBUG")
+                        self.auto_printer.stats['devices_processed'] += 1
                 
-                # If no complete packets were found, log the buffered data for debugging
+                # If no complete packets were found, show what we received and log buffered data
                 if not complete_packets:
                     buffered = self.auto_printer.parser.get_buffered_data()
                     if buffered:
-                        self.log_message(f"Buffering incomplete data: {buffered}", "DEBUG")
+                        self.log_message(f"Buffering incomplete data: {repr(buffered)}", "DEBUG")
+                    else:
+                        # If buffer is empty but we got data, it means parsing failed completely
+                        if data.strip():
+                            self.log_message(f"Failed to parse data: {repr(data)}", "WARNING")
+                            self.auto_printer.stats['parse_errors'] += 1
                 
                 self.gui_queue.put(('stats', self.auto_printer.stats))
                 # Update STC display
