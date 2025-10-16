@@ -938,6 +938,8 @@ class DeviceAutoPrinter:
                 try:
                     # Create PCB label data
                     pcb_data = self._create_pcb_label_data(device_data)
+                    logger.info(f"PCB ZPL data created: {pcb_data}")
+                    
                     pcb_success = self.pcb_printer.send_zpl(pcb_data)
                     
                     self.pcb_stats['pcb_prints_attempted'] += 1
@@ -952,6 +954,10 @@ class DeviceAutoPrinter:
                     self.pcb_stats['pcb_prints_failed'] += 1
                     logger.error(f"Error printing PCB label: {e}")
                     pcb_success = False
+            elif self.pcb_printing_enabled:
+                logger.warning("PCB printing enabled but no PCB printer configured")
+            else:
+                logger.debug("PCB printing is disabled")
             
             if success:
                 print_status = "SUCCESS"
@@ -973,22 +979,29 @@ class DeviceAutoPrinter:
     
     def _create_pcb_label_data(self, device_data: Dict[str, str]) -> str:
         """
-        Create PCB label data for PCB printing controller.
+        Create PCB label data for XPrinter PCB printing.
         
         Args:
             device_data (Dict[str, str]): Device data dictionary
             
         Returns:
-            str: PCB ZPL commands
+            str: ZPL commands optimized for XPrinter
         """
-        # Create a simple PCB label with essential device info
+        # Extract essential data
         serial_number = device_data.get('SERIAL_NUMBER', 'UNKNOWN')
         stc = device_data.get('STC', 'UNKNOWN')
         
-        # Simple PCB label template - adjust coordinates as needed for your PCB printer
+        # Simple, large text PCB label for XPrinter
+        # Using very large fonts and simple positioning to ensure visibility
         pcb_zpl = f"""^XA
-^FO10,10^A0N,30,25^FD{serial_number}^FS
-^FO10,50^A0N,20,15^FDSTC: {stc}^FS
+^MMT
+^PW400
+^LL300
+^LS0
+^CF0,40
+^FO20,50^FD{serial_number}^FS
+^CF0,30
+^FO20,120^FDSTC: {stc}^FS
 ^XZ"""
         
         return pcb_zpl
