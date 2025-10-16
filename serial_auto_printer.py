@@ -980,28 +980,29 @@ class DeviceAutoPrinter:
     def _create_pcb_label_data(self, device_data: Dict[str, str]) -> str:
         """
         Create PCB label data for XPrinter PCB printing.
+        40mm x 20mm label size (315 x 157 dots at 203 DPI)
         
         Args:
             device_data (Dict[str, str]): Device data dictionary
             
         Returns:
-            str: ZPL commands optimized for XPrinter
+            str: ZPL commands optimized for 40mm x 20mm labels
         """
         # Extract essential data
         serial_number = device_data.get('SERIAL_NUMBER', 'UNKNOWN')
         stc = device_data.get('STC', 'UNKNOWN')
         
-        # Simple, large text PCB label for XPrinter
-        # Using very large fonts and simple positioning to ensure visibility
+        # 40mm x 20mm PCB label template for XPrinter
+        # PW315 = 40mm width, LL157 = 20mm height
         pcb_zpl = f"""^XA
 ^MMT
-^PW400
-^LL300
+^PW315
+^LL157
 ^LS0
-^CF0,40
-^FO20,50^FD{serial_number}^FS
-^CF0,30
-^FO20,120^FDSTC: {stc}^FS
+^CF0,20
+^FO5,10^FD{serial_number}^FS
+^CF0,15
+^FO5,40^FDSTC: {stc}^FS
 ^XZ"""
         
         return pcb_zpl
