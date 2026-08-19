@@ -45,7 +45,7 @@ flowchart LR
 ## Installation
 
 ```bash
-git clone https://github.com/talhaid/thermal-label-printer.git
+git clone https://github.com/talhaid/label-printer.git
 cd thermal-label-printer
 pip install -r requirements.txt
 python printer_gui.py
