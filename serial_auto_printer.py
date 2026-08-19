@@ -1,27 +1,29 @@
 #!/usr/bin/env python3
 """
-Optimized Serial Port Auto-Printer for XPrinter XP-470B
-========================================================
+Serial Port Auto-Printer
+========================
 
 This module monitors a serial port for device data and automatically prints
 labels using ZPL templates and TSPL commands for PCB labels.
 
-Data Format Expected: ##ATS542912923728|866988074133496|286019876543210|8991101200003204510|AA:BB:CC:DD:EE:FF##
+Data Format Expected: ##DEV000000000001|000000000000000|000000000000000|0000000000000000000|AA:BB:CC:DD:EE:FF##
 Fields: ##SERIAL_NUMBER|IMEI|IMSI|CCID|MAC_ADDRESS##
 
 Features:
 - Serial port monitoring with robust parsing
 - Automatic ZPL template processing
-- PCB label printing using TSPL commands
+- Secondary (board) label printing using TSPL commands
 - Real-time data logging to CSV
 - Queue management for manual printing
 
-Author: Optimized Serial Auto-Printer
+Author: Serial Auto-Printer
 Date: October 2025
 """
 
 import os
 import re
+
+from config import CONFIG
 import time
 import logging
 import threading
@@ -38,7 +40,7 @@ except ImportError:
     SERIAL_AVAILABLE = False
     serial = None
 
-from zebra_zpl import ZebraZPL
+from zpl_printer import ZPLPrinter
 
 # Configure logging
 logging.basicConfig(
@@ -58,10 +60,8 @@ class DeviceDataParser:
     def __init__(self):
         self.packet_buffer = ""
         
-        # Primary pattern for complete 5-field data
-        self.primary_pattern = re.compile(
-            r'##([A-Z0-9]+)\|([0-9]+)\|([0-9]+)\s*\|([0-9A-F]+)\|([A-F0-9:]+)##'
-        )
+        # Primary pattern for complete 5-field data (overridable via config.json)
+        self.primary_pattern = re.compile(CONFIG['parse_pattern'])
         
         # Single flexible pattern for incomplete data
         self.flexible_pattern = re.compile(
@@ -108,9 +108,10 @@ class DeviceDataParser:
         device_data = {}
         for i, field_name in enumerate(self.field_names):
             value = values[i].strip()
-            # Remove ATS prefix from serial number
-            if field_name == 'SERIAL_NUMBER' and value.upper().startswith('ATS'):
-                value = value[3:].strip()
+            # Strip the configured serial prefix; the label template re-adds it
+            prefix = CONFIG['serial_prefix']
+            if field_name == 'SERIAL_NUMBER' and prefix and value.upper().startswith(prefix.upper()):
+                value = value[len(prefix):].strip()
             device_data[field_name] = value
         
         device_data['TIMESTAMP'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -154,17 +155,26 @@ class ZPLTemplate:
         self.placeholders = re.findall(r'\{([A-Z_]+)\}', template)
         logger.info(f"Template loaded with placeholders: {self.placeholders}")
     
+    # Placeholders that are filled from config.json rather than device data
+    CONFIG_PLACEHOLDERS = {'SERIAL_PREFIX': 'serial_prefix'}
+
     def render(self, device_data: Dict[str, str]) -> str:
-        """Render ZPL template with device data."""
+        """Render ZPL template with device data, filling config placeholders."""
         rendered = self.template
         for placeholder in self.placeholders:
-            value = device_data.get(placeholder, f'MISSING_{placeholder}')
+            if placeholder in device_data:
+                value = device_data[placeholder]
+            elif placeholder in self.CONFIG_PLACEHOLDERS:
+                value = str(CONFIG[self.CONFIG_PLACEHOLDERS[placeholder]])
+            else:
+                value = f'MISSING_{placeholder}'
             rendered = rendered.replace(f'{{{placeholder}}}', value)
         return rendered
     
     def validate_template(self, device_data: Dict[str, str]) -> bool:
         """Validate that all required placeholders have data."""
-        missing = [p for p in self.placeholders if p not in device_data]
+        missing = [p for p in self.placeholders
+                   if p not in device_data and p not in self.CONFIG_PLACEHOLDERS]
         if missing:
             logger.warning(f"Missing data: {missing}")
             return False
@@ -280,8 +290,8 @@ class DeviceAutoPrinter:
         self.debug_mode = debug_mode
         self.parser = DeviceDataParser()
         self.template = ZPLTemplate(zpl_template)
-        self.printer = ZebraZPL(printer_name, debug_mode=debug_mode)
-        self.pcb_printer = ZebraZPL(pcb_printer_name, debug_mode=debug_mode) if pcb_printer_name else None
+        self.printer = ZPLPrinter(printer_name, debug_mode=debug_mode)
+        self.pcb_printer = ZPLPrinter(pcb_printer_name, debug_mode=debug_mode) if pcb_printer_name else None
         self.serial_monitor = SerialPortMonitor(serial_port, baudrate) if serial_port else None
         
         # File paths
@@ -559,7 +569,7 @@ PRINT 1, 1
     
     def set_pcb_printer(self, pcb_printer_name: str):
         """Set PCB printer."""
-        self.pcb_printer = ZebraZPL(pcb_printer_name, debug_mode=self.debug_mode) if pcb_printer_name else None
+        self.pcb_printer = ZPLPrinter(pcb_printer_name, debug_mode=self.debug_mode) if pcb_printer_name else None
     
     def enable_pcb_printing(self, enabled: bool):
         """Enable/disable PCB printing."""
@@ -585,7 +595,7 @@ DEFAULT_ZPL_TEMPLATE = """^XA
 ~SD15
 
 ^FO20,50^BQN,2,4
-^FDLA,STC:{STC};SN:ATS{SERIAL_NUMBER};IMEI:{IMEI};IMSI:{IMSI};CCID:{CCID};MAC:{MAC_ADDRESS}^FS
+^FDLA,STC:{STC};SN:{SERIAL_PREFIX}{SERIAL_NUMBER};IMEI:{IMEI};IMSI:{IMSI};CCID:{CCID};MAC:{MAC_ADDRESS}^FS
 
 ^CF0,18,18
 ^FO185,32.5^FDSTC:^FS
@@ -628,7 +638,7 @@ def main():
         return
     
     if args.list_printers:
-        printer = ZebraZPL()
+        printer = ZPLPrinter()
         print("Available printers:")
         for p in printer.list_printers():
             print(f"  {p}")

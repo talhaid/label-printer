@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 """
-Zebra GC420T ZPL Printing Module
+Thermal Label Printer - ZPL Module
 ===============================
 
 A Python module for sending ZPL (Zebra Programming Language) commands 
-to your Zebra GC420T thermal printer.
+to your ZPL-compatible thermal printer.
 
-ZPL is the native language for Zebra printers and provides:
+ZPL is the native language for thermal printers and provides:
 - Fast, direct printing without image conversion
 - Precise control over layout and formatting
 - Support for barcodes, text, and graphics
 - Efficient memory usage
 - Professional label printing
 
-Author: ZPL Printer for Zebra GC420T
+Author: ZPL Printer for thermal printer
 Date: August 2025
 """
 
@@ -22,6 +22,8 @@ import sys
 import logging
 from typing import Optional, List, Dict
 import datetime
+
+from config import CONFIG
 
 try:
     import win32print
@@ -38,21 +40,21 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 
-class ZebraZPL:
+class ZPLPrinter:
     """
-    A class to handle ZPL command generation and printing to Zebra GC420T printer.
+    A class to handle ZPL command generation and printing to ZPL-compatible thermal printer.
     
-    The Zebra GC420T supports ZPL II commands for creating professional labels
+    The thermal printer supports ZPL II commands for creating professional labels
     with text, barcodes, graphics, and precise formatting.
     """
     
     def __init__(self, printer_name: str = None, debug_mode: bool = False):
         """
-        Initialize the Zebra ZPL interface.
+        Initialize the ZPL printer interface.
         
         Args:
             printer_name (str): Name of the printer as it appears in Windows.
-                              If None, will attempt to find Zebra printer automatically.
+                              If None, will attempt to find thermal printer automatically.
             debug_mode (bool): If True, simulates printing without sending to actual printer.
         """
         self.printer_name = printer_name
@@ -61,19 +63,19 @@ class ZebraZPL:
         self.debug_mode = debug_mode
         self.last_print_data = None  # Store last print data for debugging
         
-        # Default settings for GC420T
-        self.dpi = 203  # GC420T resolution
+        # Defaults for a 203 DPI thermal label printer
+        self.dpi = 203
         self.label_width = 832  # pixels at 203 DPI (4 inches)
         self.label_height = 609  # pixels at 203 DPI (3 inches)
         
         if self.debug_mode:
             logger.info("🔧 DEBUG MODE: ZPL printer initialized in debug mode (no actual printing)")
             self.printer_name = "DEBUG_PRINTER"
-            self.available_printers = ["DEBUG_PRINTER", "Simulated Zebra GC420T"]
+            self.available_printers = ["DEBUG_PRINTER", "Simulated thermal printer"]
         elif WIN32_AVAILABLE:
             self._discover_printers()
             if not self.printer_name:
-                self.printer_name = self._find_zebra_printer()
+                self.printer_name = self._find_thermal_printer()
     
     def _discover_printers(self) -> List[str]:
         """Discover all available printers on the system."""
@@ -91,14 +93,15 @@ class ZebraZPL:
         logger.info(f"Found {len(printers)} printers: {', '.join(printers)}")
         return printers
     
-    def _find_zebra_printer(self) -> Optional[str]:
-        """Automatically find Zebra printer in the system."""
+    def _find_thermal_printer(self) -> Optional[str]:
+        """Find a label printer whose name matches config['printer_keywords']."""
+        keywords = CONFIG['printer_keywords']
         for printer in self.available_printers:
-            if 'zebra' in printer.lower() or 'gc420' in printer.lower() or 'zdesigner' in printer.lower():
-                logger.info(f"Found Zebra printer: {printer}")
+            if any(keyword in printer.lower() for keyword in keywords):
+                logger.info(f"Found thermal printer: {printer}")
                 return printer
         
-        logger.warning("No Zebra printer found automatically")
+        logger.warning("No thermal printer found automatically")
         return None
     
     def list_printers(self) -> List[str]:
@@ -492,7 +495,7 @@ def main():
     """Main function for command-line usage."""
     import argparse
     
-    parser = argparse.ArgumentParser(description='Print ZPL labels to Zebra GC420T printer')
+    parser = argparse.ArgumentParser(description='Print ZPL labels to ZPL-compatible thermal printer')
     parser.add_argument('--printer', '-p', help='Printer name (will auto-detect if not specified)')
     parser.add_argument('--copies', '-c', type=int, default=1, help='Number of copies (default: 1)')
     parser.add_argument('--list-printers', '-l', action='store_true', help='List available printers')
@@ -507,17 +510,17 @@ def main():
     args = parser.parse_args()
     
     # Create printer instance
-    printer = ZebraZPL(args.printer)
+    printer = ZPLPrinter(args.printer)
     
     if args.list_printers:
         print("Available printers:")
         for p in printer.list_printers():
-            marker = " <- Zebra" if any(x in p.lower() for x in ['zebra', 'gc420', 'zdesigner']) else ""
+            marker = " <- label printer" if any(k in p.lower() for k in CONFIG['printer_keywords']) else ""
             print(f"  - {p}{marker}")
         return
     
     if not printer.printer_name:
-        print("Error: No Zebra printer found. Available printers:")
+        print("Error: No thermal printer found. Available printers:")
         for p in printer.list_printers():
             print(f"  - {p}")
         print("\nSpecify printer name with --printer option")

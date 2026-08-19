@@ -53,10 +53,11 @@ a = Analysis(
     binaries=[],
     datas=[
         ('templates/device_label_template.zpl', 'templates'),
-        ('templates/manual_box_label_template.html', 'templates'),
+        ('config.json', '.'),
+        ('config.py', '.'),
         ('serial_auto_printer.py', '.'),
-        ('zebra_zpl.py', '.'),
-        ('zebra_printer.py', '.'),
+        ('zpl_printer.py', '.'),
+        ('pdf_printer.py', '.'),
     ],
     hiddenimports=[
         'serial',
@@ -109,7 +110,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='ZebraPrinterGUI',
+    name='ThermalPrinterGUI',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -144,7 +145,7 @@ def create_exe():
         
         if result.returncode == 0:
             print("✅ EXE created successfully using spec file!")
-            print(f"📂 Output location: {os.path.abspath('dist/ZebraPrinterGUI.exe')}")
+            print(f"📂 Output location: {os.path.abspath('dist/ThermalPrinterGUI.exe')}")
             return True
         else:
             print("❌ Spec file build failed, trying direct command...")
@@ -155,10 +156,10 @@ def create_exe():
                 sys.executable, "-m", "PyInstaller",
                 "--onefile",
                 "--windowed",
-                "--name=ZebraPrinterGUI",
+                "--name=ThermalPrinterGUI",
                 "--icon=NONE",
-                "--add-data=device_label_template.zpl;.",
-                "--add-data=*.csv;.",
+                "--add-data=templates/device_label_template.zpl;templates",
+                "--add-data=config.json;.",
                 "--hidden-import=serial",
                 "--hidden-import=serial.tools",
                 "--hidden-import=serial.tools.list_ports",
@@ -187,7 +188,7 @@ def create_exe():
             
             if result.returncode == 0:
                 print("✅ EXE created successfully!")
-                print(f"📂 Output location: {os.path.abspath('dist/ZebraPrinterGUI.exe')}")
+                print(f"📂 Output location: {os.path.abspath('dist/ThermalPrinterGUI.exe')}")
                 return True
             else:
                 print("❌ Build failed!")
@@ -249,7 +250,7 @@ def test_dependencies():
 
 def main():
     """Main build process"""
-    print("🏗️  Zebra Printer GUI - Standalone EXE Builder")
+    print("🏗️  Thermal Printer GUI - Standalone EXE Builder")
     print("=" * 50)
     
     # Test dependencies first
@@ -272,14 +273,14 @@ def main():
         copy_dependencies()
         
         print("\n🎉 Build completed successfully!")
-        print(f"📂 Your executable is ready: {os.path.abspath('dist/ZebraPrinterGUI.exe')}")
+        print(f"📂 Your executable is ready: {os.path.abspath('dist/ThermalPrinterGUI.exe')}")
         print("\n📋 To distribute:")
         print("1. Copy the entire 'dist' folder to the target computer")
-        print("2. Run ZebraPrinterGUI.exe")
-        print("3. Make sure the target computer has the Zebra printer drivers installed")
+        print("2. Run ThermalPrinterGUI.exe")
+        print("3. Make sure the target computer has the thermal printer drivers installed")
         
         # Show file size
-        exe_path = 'dist/ZebraPrinterGUI.exe'
+        exe_path = 'dist/ThermalPrinterGUI.exe'
         if os.path.exists(exe_path):
             size_mb = os.path.getsize(exe_path) / (1024 * 1024)
             print(f"\n📊 EXE size: {size_mb:.1f} MB")

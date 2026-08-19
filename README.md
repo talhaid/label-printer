@@ -1,469 +1,149 @@
-# Zebra GC420T Auto-Printer System# Zebra GC420T PDF Printer for Python
+# Thermal Label Printer Automation
 
+A Windows desktop application that listens to a serial port, parses device identity data as it arrives, and prints a barcode/QR label on a thermal printer — automatically, in under a second, with every unit logged to CSV.
 
+Built for a production line where each assembled device reports its own identifiers over serial the moment it powers up. Instead of an operator reading numbers off a screen and typing them into a label designer, the device announces itself and the label comes out of the printer.
 
-A professional GUI application for automatic printing of device labels using Zebra GC420T thermal printers. Supports serial data input, real-time processing, CSV logging, and box label creation.A Python application for printing PDF files to your Zebra GC420T thermal printer.
+> **Note:** This started as an internal tool for a specific production line and has since been generalised — the serial number prefix, counter, printer names, COM ports and parsing pattern all live in [`config.json`](config.json), and the label layout is a plain ZPL template you can edit from inside the app.
 
+<!-- TODO: add screenshots here, e.g.
+![Main control tab](docs/screenshot-main.png)
+![Printed label](docs/label-sample.jpg)
+-->
 
+## What it does
 
-## 🚀 Quick Start## Features
-
-
-
-### Option 1: Run Executable (Recommended)- 🖨️ Print PDF files directly to Zebra GC420T
-
-1. Download `ZebraPrinterGUI.exe` from the `dist` folder- 📄 Convert PDF pages to thermal printer-compatible images
-
-2. Connect your Zebra GC420T printer via USB- 🔧 Automatic printer detection
-
-3. Install Zebra printer drivers if not already installed- 📋 Support for multiple copies
-
-4. Double-click `ZebraPrinterGUI.exe` to launch- 🎯 Optimized for 203 DPI thermal printing
-
-5. Select your printer and serial port in the GUI- 💾 Raw ZPL command support
-
-6. Click "Start Monitoring" to begin- 🖥️ Windows printer integration
-
-
-
-### Option 2: Run from Source## Requirements
-
-1. Install Python 3.11+ 
-
-2. Install dependencies: `pip install -r requirements.txt`- Windows OS (tested on Windows 10/11)
-
-3. Run: `python printer_gui.py`- Python 3.7+
-
-- Zebra GC420T printer connected via USB or network
-
-## 📋 System Requirements- Zebra printer drivers installed
-
-
-
-- **Operating System**: Windows 10/11## Installation
-
-- **Python**: 3.11+ (if running from source)
-
-- **Printer**: Zebra GC420T thermal printer1. **Clone or download this project**
-
-- **Connection**: USB port for printer, Serial/USB port for data input2. **Install dependencies:**
-
-- **Memory**: 4GB RAM minimum   ```bash
-
-- **Storage**: 100MB free space   pip install -r requirements.txt
-
-   ```
-
-## 🖨️ Printer Setup
-
-## Quick Start
-
-### Zebra GC420T Configuration
-
-1. **Install Zebra Drivers**:### 1. Basic Usage (Command Line)
-
-   - Download from [Zebra Support](https://www.zebra.com/us/en/support-downloads.html)
-
-   - Install the latest Windows driver package```bash
-
-   - Restart after installation# Print a PDF file
-
-python zebra_printer.py your_document.pdf
-
-2. **Printer Settings**:
-
-   - **Label Size**: 2" x 1" (50mm x 25mm)# Print multiple copies
-
-   - **Print Method**: Thermal Transfer or Direct Thermalpython zebra_printer.py your_document.pdf --copies 3
-
-   - **Speed**: Medium (2-4 IPS recommended)
-
-   - **Darkness**: 10-15 (adjust based on label quality)# List available printers
-
-python zebra_printer.py --list-printers
-
-3. **Connection**:
-
-   - Connect via USB cable# Specify printer manually
-
-   - Power on the printerpython zebra_printer.py your_document.pdf --printer "Zebra GC420T"
-
-   - Verify it appears in Windows "Devices and Printers"```
-
-
-
-## 📡 Serial Data Input### 2. Using the Python Module
-
-
-
-### Data Format```python
-
-The system expects serial data in this format:from zebra_printer import ZebraPrinter
-
+```mermaid
+flowchart LR
+    A[Device on the line] -->|serial: ##SN·IMEI·IMSI·CCID·MAC##| B[Serial monitor]
+    B --> C[Parser<br/>regex + packet buffering]
+    C --> D[ZPL template render]
+    D --> E[Windows print spooler<br/>raw passthrough]
+    E --> F[Thermal label printer]
+    C --> G[(CSV log)]
+    G --> H[Box label PDF<br/>with QR code]
 ```
 
-##SERIAL|IMEI|IMSI|CCID|MAC### Initialize printer (auto-detects Zebra)
+- **Serial monitoring** — watches a COM port, buffers partial packets and tolerates stray control characters in the stream.
+- **Field parsing** — a configurable regex pulls serial number, IMEI, IMSI, CCID and MAC out of each packet.
+- **ZPL label printing** — renders a template and sends raw ZPL straight to the Windows print spooler, so nothing is rasterised and printing stays fast.
+- **Two printing modes** — *auto* prints on arrival; *queue* holds each unit for operator confirmation and lets the tracking counter be edited first.
+- **Auto-incrementing counter** — every unit gets a sequential tracking number, resumed from the CSV history on restart so a crash doesn't reset the sequence.
+- **Dual printer support** — an optional second printer (e.g. a small board-level label printer that speaks TSPL rather than ZPL) can print simultaneously.
+- **CSV logging** — every unit, success or parse error, with timestamp and raw packet for traceability.
+- **Box labels** — collect N devices into a shipping box label as a PDF with a QR code, generated with ReportLab.
+- **Template editor** — edit the ZPL layout inside the app and test it against sample data without touching code.
+- **Standalone executable** — packaged with PyInstaller so line operators do not need Python installed.
+
+## Requirements
+
+- Windows 10/11 (the print path uses the Windows spooler via `pywin32`)
+- Python 3.9+ (only to run from source)
+- A thermal label printer that accepts raw ZPL, connected via USB with its Windows driver installed
+- A serial data source (USB-to-serial adapter, microcontroller, test fixture, …)
+
+## Installation
 
-```printer = ZebraPrinter()
-
-
-
-**Example**:# Or specify printer name
-
-```printer = ZebraPrinter("Zebra GC420T (ZPL)")
-
-##ATS542912923728|866988074133496|286019876543210|8991101200003204510|AA:BB:CC:DD:EE:FF##
-
-```# Print a PDF
-
-success = printer.print_pdf("label.pdf", copies=2)
-
-### Serial Port Configuration
-
-- **Baud Rate**: 115200 (configurable)# Check printer status
-
-- **Data Bits**: 8status = printer.get_printer_status()
-
-- **Stop Bits**: 1print(status)
-
-- **Parity**: None```
-
-- **Flow Control**: None
-
-### 3. Run Examples
-
-### Supported Devices
-
-- USB-to-Serial adapters```bash
-
-- Arduino/Microcontroller serial output# Run all demos
-
-- Direct serial ports (COM1, COM2, etc.)python example.py
-
-
-
-## 🎛️ GUI Interface Guide# Print specific PDF
-
-python example.py my_label.pdf
-
-### Main Control Tab
-
-- **Connection Settings**: Select printer and serial port# Print multiple copies
-
-- **STC Counter**: Set starting STC number (auto-increments)python example.py my_label.pdf --copies 5
-
-- **Printing Mode**: ```
-
-  - **Auto Print**: Prints immediately when data received
-
-  - **Queue Mode**: Add to queue for manual confirmation## Printer Setup
-
-- **Test Functions**: Test printer and data parsing
-
-1. **Connect your Zebra GC420T:**
-
-### Box Labels Tab   - USB: Connect via USB cable
-
-- Create box labels containing multiple devices   - Network: Configure IP settings
-
-- Import/export CSV data
-
-- Edit device information2. **Install Zebra drivers:**
-
-- Generate PDF labels for shipping boxes   - Download from [zebra.com](https://www.zebra.com/us/en/support-downloads.html)
-
-   - Install the GC420T drivers for Windows
-
-### CSV Manager Tab
-
-- View all processed devices3. **Verify printer in Windows:**
-
-- Export filtered data   - Go to Settings > Printers & Scanners
-
-- Clean duplicate entries   - Ensure your Zebra printer appears in the list
-
-- Monitor system statistics   - Print a test page to confirm connectivity
-
-
-
-### ZPL Template Tab## Supported Features
-
-- Edit label template design
-
-- Available placeholders: `{STC}`, `{SERIAL_NUMBER}`, `{IMEI}`, `{IMSI}`, `{CCID}`, `{MAC_ADDRESS}`### PDF Processing
-
-- Save/load custom templates- ✅ Multi-page PDF support
-
-- ✅ Automatic image conversion
-
-### Logs Tab- ✅ DPI optimization (203 DPI for GC420T)
-
-- View real-time system logs- ✅ Monochrome conversion for thermal printing
-
-- Save logs to file
-
-- Monitor errors and status### Printer Communication
-
-- ✅ Windows printer spooler integration
-
-### Settings Tab- ✅ Raw data printing
-
-- Configure data parsing regex- ✅ ZPL command support
-
-- Adjust field mapping- ✅ Error handling and logging
-
-- Set print preferences
-
-### Print Settings
-
-## 📁 File Structure- ✅ Copy count control
-
-- ✅ Resolution settings
-
-```- ✅ Image resizing for printer width
-
-printertest/- ✅ Automatic paper size detection
-
-├── dist/
-
-│   └── ZebraPrinterGUI.exe    # Main executable## Troubleshooting
-
-├── printer_gui.py             # Main GUI application
-
-├── serial_auto_printer.py     # Core printing logic### Common Issues
-
-├── zebra_zpl.py               # ZPL command handling
-
-├── zebra_printer.py           # Printer interface1. **"No Zebra printer found"**
-
-├── build_gui_exe.py           # Executable builder   - Check printer is connected and powered on
-
-├── run_gui.bat                # Quick launcher batch file   - Verify drivers are installed
-
-├── requirements.txt           # Python dependencies   - Run `python zebra_printer.py --list-printers` to see available printers
-
-├── templates/                 # Label templates
-
-│   ├── device_label_template.zpl2. **"Print job failed"**
-
-│   └── manual_box_label_template.html   - Ensure printer has paper loaded
-
-└── save/                      # Output folder (auto-created)   - Check for paper jams
-
-    ├── csv/                  # CSV logs   - Verify printer is online in Windows
-
-    ├── zpl_outputs/          # ZPL files
-
-    ├── box_labels/           # Box label PDFs3. **"win32print not available"**
-
-    └── backups/              # Backup files   - Install pywin32: `pip install pywin32`
-
-```   - This is required for Windows printer communication
-
-
-
-## ⚙️ Configuration4. **Poor print quality**
-
-   - Verify you're using thermal transfer or direct thermal labels
-
-### STC Counter   - Check print density settings on the printer
-
-- STC numbers auto-increment starting from 60000   - Ensure PDF resolution matches printer (203 DPI)
-
-- The system remembers the last used STC from CSV history
-
-- Manual STC adjustment available in GUI### Printer Configuration
-
-
-
-### Label Template Customization- **Media Type:** Direct thermal or thermal transfer labels
-
-1. Go to "ZPL Template" tab- **Print Method:** Thermal transfer (for durability) or direct thermal
-
-2. Modify the ZPL code using available placeholders- **Print Width:** Up to 4.09" (104mm)
-
-3. Test with "Test Parse & Print" function- **Resolution:** 203 dpi (8 dots/mm)
-
-4. Save custom templates for future use- **Print Speed:** 2-5 ips (50-127 mm/sec)
-
-
-
-### Regex Pattern Configuration## Label Design Tips
-
-Default pattern: `##([A-Z0-9]+)\|([0-9]+)\|([0-9]+)\|([0-9A-F]+)\|([A-F0-9:]+)##`
-
-1. **Size:** Design labels to match your media (common: 4"x6", 4"x3", 2"x1")
-
-Modify in Settings tab for different data formats.2. **Resolution:** Use 203 DPI for crisp text and graphics
-
-3. **Colors:** Use black and white only (thermal printers don't support color)
-
-## 🔧 Troubleshooting4. **Fonts:** Use clear, readable fonts (Arial, Helvetica work well)
-
-5. **Margins:** Leave 0.1" margins for reliable printing
-
-### Common Issues
-
-## Advanced Usage
-
-#### Printer Not Found
-
-- Verify USB connection### Custom ZPL Commands
-
-- Check Windows Device Manager
-
-- Reinstall Zebra drivers```python
-
-- Try different USB portprinter = ZebraPrinter()
-
-
-
-#### Serial Port Issues# Send raw ZPL commands
-
-- Check COM port availability in Device Managerzpl = """
-
-- Verify baud rate matches data source^XA
-
-- Try different USB ports^FO50,50^ADN,36,20^FDHello World^FS
-
-- Check cable connections^XZ
-
-"""
-
-#### Print Quality Issuesprinter.send_raw_zpl(zpl)
-
-- Adjust printer darkness setting```
-
-- Check label alignment
-
-- Clean print head### Batch Printing
-
-- Verify label size settings
-
-```python
-
-#### Data Parsing Errorsimport os
-
-- Verify data format matches expected patternfrom zebra_printer import ZebraPrinter
-
-- Check regex configuration in Settings
-
-- Use "Test Parse & Print" to debugprinter = ZebraPrinter()
-
-- Monitor Logs tab for error details
-
-# Print all PDFs in a folder
-
-### Error Messagespdf_folder = "labels"
-
-for filename in os.listdir(pdf_folder):
-
-| Error | Solution |    if filename.endswith('.pdf'):
-
-|-------|----------|        pdf_path = os.path.join(pdf_folder, filename)
-
-| "Printer not found" | Install drivers, check USB connection |        print(f"Printing {filename}...")
-
-| "Serial port busy" | Close other applications using the port |        printer.print_pdf(pdf_path)
-
-| "Parse error" | Check data format and regex pattern |```
-
-| "Print failed" | Check printer status and paper |
-
-## File Structure
-
-## 📊 Features
-
-```
-
-### Auto-Print Modeprintertest/
-
-- Processes data immediately when received├── zebra_printer.py    # Main printer module
-
-- Auto-increments STC numbers├── example.py          # Usage examples and demos
-
-- Logs all transactions to CSV├── requirements.txt    # Python dependencies
-
-- Real-time status updates└── README.md          # This file
-
-```
-
-### Queue Mode
-
-- Manual confirmation before printing## Dependencies
-
-- Edit STC values before printing
-
-- Batch print multiple devices- **PyMuPDF** - PDF processing and image extraction
-
-- Preview data before processing- **Pillow** - Image manipulation and conversion
-
-- **pywin32** - Windows printer communication
-
-### CSV Management
-
-- Automatic logging of all processed devices## License
-
-- Export capabilities
-
-- Data cleaning toolsThis project is provided as-is for educational and commercial use.
-
-- Statistics tracking
-
-## Support
-
-### Box Label Creation
-
-- Multi-device box labelsFor issues with:
-
-- QR code generation- **Printer hardware:** Contact Zebra support
-
-- PDF output- **Driver issues:** Download latest drivers from zebra.com
-
-- Customizable layouts- **Software issues:** Check printer connection and Windows settings
-
-
-
-## 🛠️ Development---
-
-
-
-### Building from Source**Happy Printing! 🏷️**
 ```bash
-# Install dependencies
+git clone https://github.com/talhaid/thermal-label-printer.git
+cd thermal-label-printer
 pip install -r requirements.txt
-
-# Run development version
 python printer_gui.py
+```
 
-# Build executable
+Or double-click `run_gui.bat`, which checks the dependencies first.
+
+**Prefer not to install Python?** Download the packaged `.exe` from the [Releases](../../releases) page and run it directly.
+
+## Configuration
+
+All deployment-specific values live in [`config.json`](config.json). Every key is optional — anything missing falls back to the defaults in [`config.py`](config.py), so the app runs without a config file.
+
+| Key | What it does | Default |
+|---|---|---|
+| `serial_prefix` | Prefix printed in front of the serial number (and stripped from incoming data). Leave empty if your serials carry their own. | `""` |
+| `counter_start` | Value the sequential tracking counter (`STC`) starts from on a fresh log. | `60000` |
+| `printer_keywords` | Case-insensitive substrings matched against Windows printer names to auto-select the label printer. | `["zebra", "gc420", "zdesigner", "thermal", "label"]` |
+| `secondary_printer_keywords` | Same, for the optional second (board) printer. | `["xprinter", "tsc", "pcb", "controller"]` |
+| `preferred_ports` | COM ports tried in order before falling back to the first one found. | `["COM7", "COM4", "COM3"]` |
+| `baudrate` | Serial baud rate. | `115200` |
+| `parse_pattern` | Regex applied to the incoming stream. Capture groups map to serial number, IMEI, IMSI, CCID, MAC in that order. | see file |
+
+### Expected data format
+
+```
+##SERIAL_NUMBER|IMEI|IMSI|CCID|MAC_ADDRESS##
+```
+
+For example:
+
+```
+##DEV000000000001|123456789012345|286010000000000|8990000000000000000|AA:BB:CC:DD:EE:FF##
+```
+
+Different format? Change `parse_pattern` in `config.json` (or from the app's Settings tab) — the field order stays the same, the delimiters and character classes are yours.
+
+## Label template
+
+The layout is plain ZPL in [`templates/device_label_template.zpl`](templates/device_label_template.zpl), editable from the app's *ZPL Template* tab. Available placeholders:
+
+`{STC}` · `{SERIAL_PREFIX}` · `{SERIAL_NUMBER}` · `{IMEI}` · `{IMSI}` · `{CCID}` · `{MAC_ADDRESS}`
+
+The default template is a 50 × 30 mm label at 203 DPI: a QR code carrying all fields on the left, human-readable text on the right.
+
+## Interface
+
+| Tab | Purpose |
+|---|---|
+| **Main Control** | Printer/port selection, counter, auto vs. queue mode, live status and statistics |
+| **Box Labels** | Group devices into a box, edit the table, generate the box label PDF |
+| **CSV Manager** | Browse the log, filter and export, clean duplicates, view statistics |
+| **ZPL Template** | Edit the label layout and test it against sample data |
+| **Logs** | Live application log, saveable to file |
+| **Settings** | Parsing pattern, field mapping, print preferences |
+
+## Project structure
+
+```
+├── printer_gui.py                # Tkinter GUI, all tabs and workflows
+├── serial_auto_printer.py        # Serial monitoring, parsing, template rendering, CSV logging
+├── zpl_printer.py                # ZPL/TSPL command generation and raw spooler printing
+├── pdf_printer.py                # PDF → raster → printer path (for pre-made PDF labels)
+├── config.py / config.json       # Configuration layer with built-in defaults
+├── build_gui_exe.py              # PyInstaller packaging script
+├── run_gui.bat                   # Dependency check + launcher
+├── templates/                    # ZPL label templates
+└── save/                         # Generated output (CSV logs, ZPL dumps, box label PDFs)
+```
+
+## Building the executable
+
+```bash
+pip install pyinstaller
 python build_gui_exe.py
 ```
 
-### Modifying Templates
-- Edit ZPL templates in `templates/` folder
-- Use ZPL commands for layout control
-- Test changes with GUI template editor
+Produces a single-file `dist/ThermalPrinterGUI.exe` with the template and config bundled. The build output is deliberately not committed — the executable belongs on the Releases page, not in git history.
 
-### Adding Features
-- Main logic in `printer_gui.py`
-- Printer interface in `zebra_zpl.py`
-- Serial handling in `serial_auto_printer.py`
+## Tested hardware
 
-## 📝 License
+Developed and run in production against a **Zebra GC420T** (203 DPI, ZPL) for device labels and an **XPrinter XP-470B** (TSPL) for small board labels. Any printer whose Windows driver accepts raw ZPL passthrough should work — add a matching substring to `printer_keywords`.
 
-This software is provided as-is for internal use. All rights reserved.
+## Troubleshooting
 
-## 🆘 Support
+| Symptom | Fix |
+|---|---|
+| Printer not listed | Confirm it appears under Windows *Devices and Printers*; reinstall the vendor driver |
+| Printer not auto-selected | Add a substring of its Windows name to `printer_keywords` in `config.json` |
+| `win32print not available` | `pip install pywin32` |
+| Serial port busy | Another application (a terminal, the vendor tool) is holding the port — close it |
+| Parse errors in the log | Compare an incoming packet against `parse_pattern`; the Logs tab shows the raw data |
+| Label prints blank or garbled | The driver is rasterising instead of passing ZPL through — enable passthrough, or use the ZPL/"generic text" driver variant |
 
-For technical support:
-1. Check the troubleshooting section above
-2. Review the Logs tab for error details
-3. Verify all connections and driver installations
-4. Test with sample data first
+## Notes on scope
 
----
+This is a single-purpose production tool rather than a library. The GUI module is large and carries most of the workflow logic; splitting it further, adding tests around the parser, and replacing the remaining `print()` calls with structured logging are the obvious next steps and are not done yet.
 
-**Version**: 3.0  
-**Last Updated**: October 2025  
-**Compatible**: Windows 10/11, Zebra GC420T
+## License
+
+[MIT](LICENSE)

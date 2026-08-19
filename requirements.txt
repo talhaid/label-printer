@@ -1,19 +1,18 @@
-# Requirements for Zebra GC420T ZPL Printing
-# ==========================================
+# Runtime dependencies
+# =====================
+# Python 3.9+ on Windows. tkinter ships with the standard CPython installer.
 
-# Windows printer support (REQUIRED)
-pywin32>=306            # For Windows printer communication
+pywin32>=306            # Windows print spooler access (raw ZPL/TSPL passthrough)
+pyserial>=3.5           # Serial port monitoring
+pandas>=2.0.0           # CSV log handling and the box-label device table
+qrcode>=7.4.0           # QR codes on box labels
+reportlab>=4.0.0        # Box label PDF generation
+Pillow>=10.0.0          # Image handling for PDF-based printing
 
-# Serial port communication (REQUIRED for auto-printing)
-pyserial>=3.5           # For serial port monitoring
+# Optional: only needed for the PDF -> raster printing path (pdf_printer.py).
+# Install one of these if you print existing PDF files instead of ZPL.
+# PyMuPDF>=1.23.0
+# PyPDF2>=3.0.0
 
-# Optional: Report generation for sample PDFs
-reportlab>=4.0.0        # For creating sample labels and reports
-
-# Optional: PDF processing (if you ever need it)
-# PyMuPDF>=1.23.0       # For PDF processing (uncomment if needed)
-# Pillow>=10.0.0        # For image processing (uncomment if needed)
-
-# Development and testing (optional)
-# pytest>=7.4.0         # For unit testing (uncomment for development)
-# black>=23.0.0          # For code formatting (uncomment for development)
+# Optional: building the standalone executable (see build_gui_exe.py)
+# pyinstaller>=6.0.0

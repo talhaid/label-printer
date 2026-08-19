@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Zebra GC420T PDF Printing Module
+Thermal Label Printer - PDF Module
 ===============================
 
-A Python module for printing PDF files to a Zebra GC420T thermal printer.
+A Python module for printing PDF files to a ZPL-compatible thermal printer.
 This module provides functionality to:
 - Convert PDF pages to images
-- Send raw data to the Zebra printer
+- Send raw data to the thermal printer
 - Handle printer communication via USB or Network
 - Configure print settings for optimal output
 
@@ -14,9 +14,9 @@ Requirements:
 - PyPDF2 or pypdf for PDF handling
 - Pillow (PIL) for image processing
 - win32print for Windows printer communication
-- zebra-zpl for ZPL command generation (optional)
+- optional ZPL helper libraries (optional)
 
-Author: Python PDF Printer for Zebra GC420T
+Author: Python PDF Printer for thermal printer
 Date: August 2025
 """
 
@@ -26,6 +26,8 @@ import logging
 from typing import Optional, List, Tuple
 import tempfile
 import subprocess
+
+from config import CONFIG
 
 try:
     import win32print
@@ -63,21 +65,21 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 
-class ZebraPrinter:
+class PDFPrinter:
     """
-    A class to handle PDF printing to Zebra GC420T printer.
+    A class to handle PDF printing to ZPL-compatible thermal printer.
     
-    The Zebra GC420T is a thermal transfer/direct thermal printer that supports
+    The thermal printer is a thermal transfer/direct thermal printer that supports
     multiple connection types including USB, Serial, and Ethernet.
     """
     
     def __init__(self, printer_name: str = None):
         """
-        Initialize the Zebra printer interface.
+        Initialize the thermal printer interface.
         
         Args:
             printer_name (str): Name of the printer as it appears in Windows.
-                              If None, will attempt to find Zebra printer automatically.
+                              If None, will attempt to find thermal printer automatically.
         """
         self.printer_name = printer_name
         self.available_printers = []
@@ -86,7 +88,7 @@ class ZebraPrinter:
         if win32print:
             self._discover_printers()
             if not self.printer_name:
-                self.printer_name = self._find_zebra_printer()
+                self.printer_name = self._find_thermal_printer()
     
     def _discover_printers(self) -> List[str]:
         """Discover all available printers on the system."""
@@ -104,14 +106,15 @@ class ZebraPrinter:
         logger.info(f"Found {len(printers)} printers: {', '.join(printers)}")
         return printers
     
-    def _find_zebra_printer(self) -> Optional[str]:
-        """Automatically find Zebra printer in the system."""
+    def _find_thermal_printer(self) -> Optional[str]:
+        """Find a label printer whose name matches config['printer_keywords']."""
+        keywords = CONFIG['printer_keywords']
         for printer in self.available_printers:
-            if 'zebra' in printer.lower() or 'gc420' in printer.lower():
-                logger.info(f"Found Zebra printer: {printer}")
+            if any(keyword in printer.lower() for keyword in keywords):
+                logger.info(f"Found thermal printer: {printer}")
                 return printer
         
-        logger.warning("No Zebra printer found automatically")
+        logger.warning("No thermal printer found automatically")
         return None
     
     def list_printers(self) -> List[str]:
@@ -142,7 +145,7 @@ class ZebraPrinter:
         
         Args:
             pdf_path (str): Path to the PDF file
-            dpi (int): Resolution for conversion (203 DPI matches GC420T)
+            dpi (int): Resolution for conversion (203 DPI is typical for thermal printers)
             
         Returns:
             List: List of PIL Images, one per page
@@ -185,7 +188,7 @@ class ZebraPrinter:
     
     def print_image(self, image, copies: int = 1) -> bool:
         """
-        Print a PIL Image to the Zebra printer.
+        Print a PIL Image to the thermal printer.
         
         Args:
             image: PIL Image to print
@@ -218,7 +221,7 @@ class ZebraPrinter:
                     if PIL_AVAILABLE and Image:
                         # Save image to temporary file
                         with tempfile.NamedTemporaryFile(delete=False, suffix='.bmp') as tmp:
-                            # Resize image if needed (GC420T max width ~832 pixels at 203 DPI)
+                            # Resize image if needed (~832 pixels max width at 203 DPI)
                             max_width = 832
                             if image.width > max_width:
                                 ratio = max_width / image.width
@@ -256,12 +259,12 @@ class ZebraPrinter:
     
     def print_pdf(self, pdf_path: str, copies: int = 1, dpi: int = 203) -> bool:
         """
-        Print a PDF file to the Zebra printer.
+        Print a PDF file to the thermal printer.
         
         Args:
             pdf_path (str): Path to the PDF file
             copies (int): Number of copies to print
-            dpi (int): Resolution for printing (203 DPI for GC420T)
+            dpi (int): Resolution for printing (203 DPI for thermal printers)
             
         Returns:
             bool: True if successful, False otherwise
@@ -374,7 +377,7 @@ def main():
     """Main function for command-line usage."""
     import argparse
     
-    parser = argparse.ArgumentParser(description='Print PDF files to Zebra GC420T printer')
+    parser = argparse.ArgumentParser(description='Print PDF files to ZPL-compatible thermal printer')
     parser.add_argument('pdf_file', help='Path to PDF file to print')
     parser.add_argument('--printer', '-p', help='Printer name (will auto-detect if not specified)')
     parser.add_argument('--copies', '-c', type=int, default=1, help='Number of copies (default: 1)')
@@ -384,7 +387,7 @@ def main():
     args = parser.parse_args()
     
     # Create printer instance
-    printer = ZebraPrinter(args.printer)
+    printer = PDFPrinter(args.printer)
     
     if args.list_printers:
         print("Available printers:")
@@ -393,7 +396,7 @@ def main():
         return
     
     if not printer.printer_name:
-        print("Error: No Zebra printer found. Available printers:")
+        print("Error: No thermal printer found. Available printers:")
         for p in printer.list_printers():
             print(f"  - {p}")
         print("\nSpecify printer name with --printer option")

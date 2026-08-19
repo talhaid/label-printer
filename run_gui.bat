@@ -1,20 +1,19 @@
 @echo off
-echo Zebra Yazici GUI Baslatiliyor...
-echo Gerekli kutuphaneler kontrol ediliyor...
+echo Starting Thermal Label Printer GUI...
+echo Checking dependencies...
 
-python -c "import tkinter, serial, reportlab, pandas" 2>nul
+python -c "import tkinter, serial, pandas, qrcode, reportlab" 2>nul
 if errorlevel 1 (
-    echo HATA: Gerekli Python kutuphaneleri bulunamadi!
-    echo Lutfen once: pip install -r requirements.txt
+    echo ERROR: Required Python packages are missing.
+    echo Run: pip install -r requirements.txt
     pause
     exit /b 1
 )
 
-echo Tum kutuphaneler hazir.
-echo GUI baslatiliyor...
-python src\printer_gui.py
+echo Dependencies OK. Launching...
+python printer_gui.py
 
 if errorlevel 1 (
-    echo HATA: Uygulama calistirilirken hata olustu!
+    echo ERROR: The application exited with an error.
     pause
 )

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Zebra GC420T Auto-Printer GUI
+Thermal Label Printer - GUI
 ============================
 
-A user-friendly GUI for the Zebra GC420T serial auto-printer system.
+A user-friendly GUI for the thermal printer serial auto-printer system.
 
 Features:
 - Serial port selection and monitoring
@@ -14,7 +14,7 @@ Features:
 - Template management
 - Easy configuration
 
-Author: GUI for Zebra GC420T Auto-Printer
+Author: GUI for thermal printer Auto-Printer
 Date: August 2025
 """
 
@@ -35,7 +35,8 @@ from reportlab.lib.colors import black
 
 # Import our modules
 from serial_auto_printer import DeviceAutoPrinter, SerialPortMonitor, DeviceDataParser, ZPLTemplate
-from zebra_zpl import ZebraZPL
+from config import CONFIG
+from zpl_printer import ZPLPrinter
 
 
 class AutoPrinterGUI:
@@ -44,7 +45,7 @@ class AutoPrinterGUI:
     def __init__(self, root):
         """Initialize the GUI."""
         self.root = root
-        self.root.title("Zebra & XPrinter Auto-Printer")
+        self.root.title("Thermal Label Printer")
         self.root.geometry("900x700")
         
         # Initialize clean folder structure first
@@ -52,7 +53,7 @@ class AutoPrinterGUI:
         
         # System components
         self.auto_printer = None
-        self.printer = ZebraZPL()
+        self.printer = ZPLPrinter()
         self.is_monitoring = False
         
         # GUI update queue
@@ -77,7 +78,7 @@ class AutoPrinterGUI:
 ~SD15
 
 ^FO20,50^BQN,2,4
-^FDLA,STC:{STC};SN:ATS{SERIAL_NUMBER};IMEI:{IMEI};IMSI:{IMSI};CCID:{CCID};MAC:{MAC_ADDRESS}^FS
+^FDLA,STC:{STC};SN:{SERIAL_PREFIX}{SERIAL_NUMBER};IMEI:{IMEI};IMSI:{IMSI};CCID:{CCID};MAC:{MAC_ADDRESS}^FS
 
 ^CF0,18,18
 ^FO185,32.5^FDSTC:^FS
@@ -331,12 +332,12 @@ class AutoPrinterGUI:
         stc_frame.pack(fill="x", padx=5, pady=5)
         
         ttk.Label(stc_frame, text="Current STC:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
-        self.stc_label = ttk.Label(stc_frame, text="60000", font=("Arial", 12, "bold"))
+        self.stc_label = ttk.Label(stc_frame, text=str(CONFIG['counter_start']), font=("Arial", 12, "bold"))
         self.stc_label.grid(row=0, column=1, sticky="w", padx=5, pady=2)
         
         ttk.Label(stc_frame, text="Set STC:").grid(row=0, column=2, sticky="w", padx=5, pady=2)
         self.stc_entry = ttk.Entry(stc_frame, width=10)
-        self.stc_entry.insert(0, "60000")
+        self.stc_entry.insert(0, str(CONFIG['counter_start']))
         self.stc_entry.grid(row=0, column=3, sticky="w", padx=5, pady=2)
         
         ttk.Button(stc_frame, text="Update STC", command=self.update_stc).grid(row=0, column=4, padx=5, pady=2)
@@ -739,7 +740,7 @@ class AutoPrinterGUI:
             messagebox.showinfo("Success", 
                 f"ZPL label template copied to clipboard!\n\n"
                 f"STC: {template_data['STC']}\n"
-                f"Serial: ATS{template_data['SERIAL_NUMBER']}\n"
+                f"Serial: {CONFIG['serial_prefix']}{template_data['SERIAL_NUMBER']}\n"
                 f"IMEI: {template_data['IMEI']}\n"
                 f"IMSI: {template_data['IMSI']}\n"
                 f"CCID: {template_data['CCID']}\n"
@@ -856,7 +857,7 @@ class AutoPrinterGUI:
                 messagebox.showinfo("Success", 
                     f"Custom ZPL label template copied to clipboard!\n\n"
                     f"STC: {data['STC']}\n"
-                    f"Serial: ATS{data['SERIAL_NUMBER']}\n"
+                    f"Serial: {CONFIG['serial_prefix']}{data['SERIAL_NUMBER']}\n"
                     f"IMEI: {data['IMEI']}\n"
                     f"IMSI: {data['IMSI']}\n"
                     f"CCID: {data['CCID']}\n"
@@ -1047,7 +1048,7 @@ class AutoPrinterGUI:
         self.csv_errors_label.grid(row=0, column=5, sticky="w", padx=5)
         
         ttk.Label(stats_grid, text="Latest STC:").grid(row=1, column=0, sticky="w", padx=5)
-        self.csv_latest_stc_label = ttk.Label(stats_grid, text="60000", font=("Arial", 10, "bold"))
+        self.csv_latest_stc_label = ttk.Label(stats_grid, text=str(CONFIG['counter_start']), font=("Arial", 10, "bold"))
         self.csv_latest_stc_label.grid(row=1, column=1, sticky="w", padx=5)
         
         ttk.Label(stats_grid, text="File Size:").grid(row=1, column=2, sticky="w", padx=20)
@@ -1182,7 +1183,7 @@ class AutoPrinterGUI:
         ttk.Label(regex_frame, text="Current pattern for: ##SERIAL|IMEI|IMSI|CCID|MAC##").pack(anchor="w", padx=5, pady=2)
         
         self.regex_entry = ttk.Entry(regex_frame, width=80)
-        self.regex_entry.insert(0, r'##([A-Z0-9]+)\|([0-9]+)\|([0-9]+)\|([0-9A-F]+)\|([A-F0-9:]+)##')
+        self.regex_entry.insert(0, CONFIG['parse_pattern'])
         self.regex_entry.pack(padx=5, pady=5)
         
         ttk.Button(regex_frame, text="Test Regex", command=self.test_regex).pack(padx=5, pady=5)
@@ -1214,7 +1215,7 @@ class AutoPrinterGUI:
             # Create a temporary auto-printer instance to check CSV
             temp_printer = DeviceAutoPrinter(
                 zpl_template=self.current_template,
-                initial_stc=60000,
+                initial_stc=CONFIG['counter_start'],
                 pcb_printer_name=None,  # No PCB printer needed for STC check
                 csv_file_path=self.csv_file_path
             )
@@ -1233,8 +1234,8 @@ class AutoPrinterGUI:
             self.log_message(f"Error initializing STC from CSV: {e}", "WARNING")
             # Use default value
             self.stc_entry.delete(0, "end")
-            self.stc_entry.insert(0, "60000")
-            self.stc_label.config(text="60000")
+            self.stc_entry.insert(0, str(CONFIG['counter_start']))
+            self.stc_label.config(text=str(CONFIG['counter_start']))
     
     def update_printer_list(self):
         """Update the printer dropdown list."""
@@ -1242,9 +1243,10 @@ class AutoPrinterGUI:
             printers = self.printer.list_printers()
             self.printer_combo['values'] = printers
             
-            # Auto-select Zebra or XPrinter if found
+            # Auto-select the first printer matching the configured keywords
+            keywords = CONFIG['printer_keywords'] + CONFIG['secondary_printer_keywords']
             for printer in printers:
-                if any(x in printer.lower() for x in ['zebra', 'gc420', 'zdesigner', 'xprinter', 'xp-470', 'xp58', 'xp80', 'xp365', 'pcb', 'thermal']):
+                if any(keyword in printer.lower() for keyword in keywords):
                     self.printer_combo.set(printer)
                     break
             else:
@@ -1263,7 +1265,7 @@ class AutoPrinterGUI:
             # Auto-select PCB printer if found (different from main printer)
             main_printer = self.printer_combo.get()
             for printer in printers:
-                if printer != main_printer and any(x in printer.lower() for x in ['pcb', 'controller', 'xprinter', 'thermal']):
+                if printer != main_printer and any(k in printer.lower() for k in CONFIG['secondary_printer_keywords']):
                     self.pcb_printer_combo.set(printer)
                     break
             else:
@@ -1283,13 +1285,10 @@ class AutoPrinterGUI:
             port_names = [port['device'] for port in ports]
             self.port_combo['values'] = port_names
             
-            # Try to set COM7 as default (USB-SERIAL device), then COM4, then COM3, otherwise use first available
-            if 'COM7' in port_names:
-                self.port_combo.set('COM7')
-            elif 'COM4' in port_names:
-                self.port_combo.set('COM4')
-            elif 'COM3' in port_names:
-                self.port_combo.set('COM3')
+            # Prefer the ports listed in config.json, otherwise take the first one
+            preferred = next((port for port in CONFIG['preferred_ports'] if port in port_names), None)
+            if preferred:
+                self.port_combo.set(preferred)
             elif port_names:
                 self.port_combo.set(port_names[0])
                 
@@ -1317,9 +1316,9 @@ class AutoPrinterGUI:
             try:
                 initial_stc = int(self.stc_entry.get())
             except ValueError:
-                initial_stc = 60000
+                initial_stc = CONFIG['counter_start']
                 self.stc_entry.delete(0, "end")
-                self.stc_entry.insert(0, "60000")
+                self.stc_entry.insert(0, str(CONFIG['counter_start']))
             
             # Create auto-printer instance
             pcb_printer_name = self.pcb_printer_combo.get() if hasattr(self, 'pcb_printer_combo') else None
@@ -1447,7 +1446,7 @@ class AutoPrinterGUI:
                 messagebox.showerror("Error", "Please select a printer")
                 return
             
-            printer = ZebraZPL(printer_name)
+            printer = ZPLPrinter(printer_name)
             success = printer.print_text_label("GUI TEST", ["Print test from GUI", f"Time: {datetime.now().strftime('%H:%M:%S')}"])
             
             if success:
@@ -1514,7 +1513,7 @@ class AutoPrinterGUI:
                 zpl_template = ZPLTemplate(template)
                 zpl_commands = zpl_template.render(device_data)
                 
-                printer = ZebraZPL(printer_name)
+                printer = ZPLPrinter(printer_name)
                 success = printer.send_zpl(zpl_commands)
                 
                 if success:
@@ -1536,7 +1535,7 @@ class AutoPrinterGUI:
             # Create test device data
             test_device_data = {
                 'STC': '60001',
-                'SERIAL_NUMBER': 'ATS542912923728',
+                'SERIAL_NUMBER': 'DEV000000000001',
                 'IMEI': '866988074133496',
                 'IMSI': '286019876543210',
                 'CCID': '8991101200003204510',
@@ -2385,13 +2384,13 @@ class AutoPrinterGUI:
     
     def show_about(self):
         """Show about dialog."""
-        about_text = """Zebra & XPrinter Auto-Printer GUI
+        about_text = """Thermal Label Printer GUI
         
 Version: 2.1
 Date: December 2024
 
 Features:
-- Multi-printer support (Zebra GC420T & XPrinter)
+- Multi-printer support (label printer + optional board printer)
 - Simultaneous dual printing (Label + PCB)
 - Dual-mode operation (Auto-Print / Queue)
 - Real-time serial monitoring  
@@ -2640,7 +2639,7 @@ For support and updates, check the project documentation."""
             current_data['SERIAL_NUMBER'] = current_data['SERIAL_NUMBER'] + "_COPY"
             if 'STC' in current_data:
                 # Auto-increment STC
-                max_stc = self.box_devices_df['STC'].max() if len(self.box_devices_df) > 0 else 60000
+                max_stc = self.box_devices_df['STC'].max() if len(self.box_devices_df) > 0 else CONFIG['counter_start']
                 current_data['STC'] = max_stc + 1
             
             # Show edit dialog for the duplicated data
@@ -2708,7 +2707,7 @@ For support and updates, check the project documentation."""
                     entry.insert(0, str(current_data[field]))
                 elif field == 'STC' and not current_data:
                     # Auto-generate STC for new devices
-                    max_stc = self.box_devices_df['STC'].max() if len(self.box_devices_df) > 0 else 60000
+                    max_stc = self.box_devices_df['STC'].max() if len(self.box_devices_df) > 0 else CONFIG['counter_start']
                     entry.insert(0, str(max_stc + 1))
             
             entry.grid(row=i, column=1, padx=5, pady=5)
@@ -3172,13 +3171,13 @@ For support and updates, check the project documentation."""
                 
                 error_records = total_records - valid_records
                 # STC is in the second column (index 1)
-                latest_stc = 60000  # Default value
+                latest_stc = CONFIG['counter_start']  # Default value
                 if len(self.csv_data) > 0 and len(self.csv_data.columns) > 1:
                     try:
                         stc_col = self.csv_data.iloc[:, 1]  # Second column has STC values
-                        latest_stc = stc_col.max() if len(stc_col) > 0 else 60000
+                        latest_stc = stc_col.max() if len(stc_col) > 0 else CONFIG['counter_start']
                     except:
-                        latest_stc = 60000
+                        latest_stc = CONFIG['counter_start']
                 
                 # File statistics
                 file_size = os.path.getsize(csv_path) / 1024  # KB
@@ -3315,8 +3314,8 @@ For support and updates, check the project documentation."""
             
             # Reset STC counter in auto_printer if available
             if hasattr(self, 'auto_printer') and self.auto_printer:
-                self.auto_printer.current_stc = 60000  # Reset to starting STC
-                self.log_message("STC counter reset to 60000", "INFO")
+                self.auto_printer.current_stc = CONFIG['counter_start']  # Reset to starting STC
+                self.log_message(f"STC counter reset to {CONFIG['counter_start']}", "INFO")
             
             # Refresh displays
             self.refresh_csv_view()
@@ -3330,7 +3329,7 @@ For support and updates, check the project documentation."""
                 "Success", 
                 f"CSV data cleared successfully!\n\n"
                 f"Backup saved as:\n{backup_path}\n\n"
-                f"STC counter reset to 60000"
+                f"STC counter reset to {CONFIG['counter_start']}"
             )
             
         except Exception as e:
